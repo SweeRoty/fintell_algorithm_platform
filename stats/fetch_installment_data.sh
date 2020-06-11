@@ -5,11 +5,11 @@ to=$2
 
 job="
 use ronghui;
-set mapreduce.job.queuename=root.ronghui.adhoc;
+set mapreduce.job.queuename=root.ronghui.preonline;
 set hive.support.concurrency=false;
 set hive.vectorized.execution=ture;
 
-create temporary table ronghui.rlab_stats_report_installment_raw (imei String, app_package String, app_name String, status int)
+create temporary table ronghui.rlab_stats_report_installment_raw (device String, app_package String, app_name String, status int)
 partitioned by(data_date String)
 ROW FORMAT SERDE
 'org.apache.hadoop.hive.ql.io.orc.OrcSerde'
@@ -83,7 +83,7 @@ select
 from
     ronghui.rlab_stats_report_installment_raw
 group by
-    app,
+    app_package,
     status,
     data_date
 "
