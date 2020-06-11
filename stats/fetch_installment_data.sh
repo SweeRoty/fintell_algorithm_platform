@@ -18,8 +18,8 @@ STORED AS ORC;
 insert overwrite table ronghui.rlab_stats_report_installment_raw
 partition(data_date)
 select
-	md5(imei),
-	package, app_package,
+	md5(imei) device,
+	package app_package,
 	name app_name,
 	status,
 	data_date
@@ -45,7 +45,7 @@ from
 group by
 	data_date;
 
-create table if not exist ronghui.rlab_stats_report_installment_device (imei String, status int, device_record_count int, device_app_count int)
+create table if not exist ronghui.rlab_stats_report_installment_device (device String, status int, device_record_count int, device_app_count int)
 partitioned by(data_date String)
 ROW FORMAT SERDE
 'org.apache.hadoop.hive.ql.io.orc.OrcSerde'
@@ -54,7 +54,7 @@ STORED AS ORC;
 insert overwrite table ronghui.rlab_stats_report_installment_device
 partition(data_date)
 select
-	imei,
+	device,
 	status,
 	count(1) device_record_count,
 	count(distinct app_package) device_app_count,
@@ -62,7 +62,7 @@ select
 from
 	ronghui.rlab_stats_report_installment_raw
 group by
-	imei,
+	device,
 	status,
 	data_date
 
