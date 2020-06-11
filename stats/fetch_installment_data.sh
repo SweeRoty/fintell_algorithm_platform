@@ -64,7 +64,7 @@ from
 group by
 	device,
 	status,
-	data_date
+	data_date;
 
 create table if not exist ronghui.rlab_stats_report_installment_app (app_package String, status int, app_record_count int, app_device_count int)
 partitioned by(data_date String)
