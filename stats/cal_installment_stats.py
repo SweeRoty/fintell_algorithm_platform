@@ -53,24 +53,30 @@ if __name__ == '__main__':
 	result['newly_install_count'] = records.where(records.status == 2).count()
 	result['uninstall_count'] = records.where(records.status == 0).count()
 
-	devices = records.groupBy(['imei', 'status']).agg(F.count(F.lit(1)).alias('device_install_times'), F.countDistinct('app_package').alias('device_install_app_count')).cache()
+	devices = records.groupBy(['imei', 'status']).agg(F.count(F.lit(1)).alias('device_install_times'), \
+		F.countDistinct('app_package').alias('device_install_app_count')).cache()
 	result['newly_installed_device_count'] = devices.where(devices.status == 2).count()	
-	devices_stats = devices.where(devices.status == 2).select(F.mean('device_install_times').alias('avg_newly_install_times_pd'), F.mean('device_install_app_count').alias('avg_newly_installed_app_pd')).collect()
+	devices_stats = devices.where(devices.status == 2).select(F.mean('device_install_times').alias('avg_newly_install_times_pd'), \
+		F.mean('device_install_app_count').alias('avg_newly_installed_app_pd')).collect()
 	result['avg_newly_install_times_pd'] = devices_stats[0]['avg_newly_install_times_pd']
 	result['avg_newly_installed_app_pd'] = devices_stats[0]['avg_newly_installed_app_pd']
 	result['uninstalled_device_count'] = devices.where(devices.status == 0).count()
-	devices_stats = devices.where(devices.status == 0).select(F.mean('device_install_times').alias('avg_uninstall_times_pd'), F.mean('device_install_app_count').alias('avg_uninstalled_app_pd')).collect()
+	devices_stats = devices.where(devices.status == 0).select(F.mean('device_install_times').alias('avg_uninstall_times_pd'), \
+		F.mean('device_install_app_count').alias('avg_uninstalled_app_pd')).collect()
 	result['avg_uninstall_times_pd'] = devices_stats[0]['avg_uninstall_times_pd']
 	result['avg_uninstalled_app_pd'] = devices_stats[0]['avg_uninstalled_app_pd']
 	devices.unpersist()
 
-	apps = records.groupBy(['app_package', 'status']).agg(F.count(F.lit(1)).alias('app_install_times'), F.countDistinct('imei').alias('app_install_device_count')).cache()
+	apps = records.groupBy(['app_package', 'status']).agg(F.count(F.lit(1)).alias('app_install_times'), \
+		F.countDistinct('imei').alias('app_install_device_count')).cache()
 	result['newly_installed_app_count'] = apps.where(apps.status == 2).count()	
-	apps_stats = apps.where(apps.status == 2).select(F.mean('app_install_times').alias('avg_newly_install_times_pa'), F.mean('app_install_device_count').alias('avg_newly_installed_device_pa')).collect()
+	apps_stats = apps.where(apps.status == 2).select(F.mean('app_install_times').alias('avg_newly_install_times_pa'), \
+		F.mean('app_install_device_count').alias('avg_newly_installed_device_pa')).collect()
 	result['avg_newly_install_times_pa'] = apps_stats[0]['avg_newly_install_times_pa']
 	result['avg_newly_installed_device_pa'] = apps_stats[0]['avg_newly_installed_device_pa']
 	result['uninstalled_app_count'] = apps.where(apps.status == 0).count()
-	apps_stats = apps.where(apps.status == 0).select(F.mean('app_install_times').alias('avg_uninstall_times_pa'), F.mean('app_install_device_count').alias('avg_uninstalled_device_pd')).collect()
+	apps_stats = apps.where(apps.status == 0).select(F.mean('app_install_times').alias('avg_uninstall_times_pa'), \
+		F.mean('app_install_device_count').alias('avg_uninstalled_device_pd')).collect()
 	result['avg_uninstall_times_pa'] = apps_stats[0]['avg_uninstall_times_pa']
 	result['avg_uninstalled_device_pd'] = apps_stats[0]['avg_uninstalled_device_pd']
 	apps.unpersist()
