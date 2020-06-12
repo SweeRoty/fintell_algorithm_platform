@@ -11,7 +11,7 @@ import argparse
 def retrieveUidInfo(spark, to):
 	sql = """
 		select
-			uid,
+			distinct uid,
 			package_name app_package,
 			imei
 		from
@@ -75,12 +75,14 @@ if __name__ == '__main__':
 	result['android_online_device_count'] = devices_stats[0]['android_online_device_count']
 	result['android_avg_online_times_pd'] = devices_stats[0]['android_avg_online_times_pd']
 	result['android_avg_online_app_pd'] = devices_stats[0]['android_avg_online_app_pd']
+	'''
 	devices_stats = devices.where(devices.os == 'i').select(F.count(F.lit(1)).alias('ios_online_device_count'), \
 		F.mean('device_online_times').alias('ios_avg_online_times_pd'), \
 		F.mean('device_online_app_count').alias('ios_avg_online_app_pd')).collect()
 	result['ios_online_device_count'] = devices_stats[0]['ios_online_device_count']
 	result['ios_avg_online_times_pd'] = devices_stats[0]['ios_avg_online_times_pd']
 	result['ios_avg_online_app_pd'] = devices_stats[0]['ios_avg_online_app_pd']
+	'''
 	devices.unpersist()
 
 	apps = records.groupBy(['app_package', 'os']).agg(F.count(F.lit(1)).alias('app_online_times'), \
@@ -91,12 +93,14 @@ if __name__ == '__main__':
 	result['android_online_app_count'] = apps_stats[0]['android_online_app_count']
 	result['android_avg_online_times_pa'] = apps_stats[0]['android_avg_online_times_pa']
 	result['android_avg_online_device_pa'] = apps_stats[0]['android_avg_online_device_pa']
+	'''
 	apps_stats = apps.where(apps.os == 'i').select(F.count(F.lit(1)).alias('ios_online_app_count'), \
 		F.mean('app_online_times').alias('ios_avg_online_times_pa'), \
 		F.mean('app_online_device_count').alias('ios_avg_online_device_pa')).collect()
 	result['ios_online_app_count'] = apps_stats[0]['ios_online_app_count']
 	result['ios_avg_online_times_pa'] = apps_stats[0]['ios_avg_online_times_pa']
 	result['ios_avg_online_device_pa'] = apps_stats[0]['ios_avg_online_device_pa']
+	'''
 	apps.unpersist()
 
 	result = spark.createDataFrame([result])
