@@ -81,7 +81,6 @@ if __name__ == '__main__':
 		F.count(F.lit(1)).alias('online_device_count'), \
 		F.mean('device_online_times').alias('avg_online_times_per_device'), \
 		F.mean('device_online_app_count').alias('avg_online_app_per_device')).collect()
-	#print(devices)
 	result['online_device_count'] = devices[0]['online_device_count']
 	result['avg_online_times_per_device'] = devices[0]['avg_online_times_per_device']
 	result['avg_online_app_per_device'] = devices[0]['avg_online_app_per_device']
@@ -93,10 +92,9 @@ if __name__ == '__main__':
 		F.count(F.lit(1)).alias('online_app_count'), \
 		F.mean('app_online_times').alias('avg_online_times_per_app'), \
 		F.mean('app_online_device_count').alias('avg_online_device_per_app')).collect()
-	#print(apps)
-	result['online_app_count'] = apps_stats[0]['online_app_count']
-	result['avg_online_times_per_app'] = apps_stats[0]['avg_online_times_per_app']
-	result['avg_online_device_per_app'] = apps_stats[0]['avg_online_device_per_app']
+	result['online_app_count'] = apps[0]['online_app_count']
+	result['avg_online_times_per_app'] = apps[0]['avg_online_times_per_app']
+	result['avg_online_device_per_app'] = apps[0]['avg_online_device_per_app']
 
 	result = sc.parallelize([result]).map(transform_to_row).toDF()
 	result.repartition(1).write.csv('/user/hive/warehouse/ronghui.db/rlab_stats_report/online/{0}'.format(args.fr), header=True)
