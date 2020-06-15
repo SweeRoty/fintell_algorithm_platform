@@ -32,7 +32,7 @@ def retrieveLBSRecords(spark, fr, to):
 			uid,
 			coordinate_source type
 		from
-			edw.active_user_log
+			edw.user_location_log
 		where
 			data_date between '{0}' and '{1}'
 			and from_unixtime(itime, 'yyyyMMdd') between '{0}' and '{1}'
