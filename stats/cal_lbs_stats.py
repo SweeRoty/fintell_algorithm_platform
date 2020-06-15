@@ -24,7 +24,7 @@ def retrieveUidInfo(spark, to, os):
 	uids = spark.sql(sql)
 	return uids
 
-def retrieveLBSRecords(spark, fr, to):
+def retrieveLBSRecords(spark, fr, to, os):
 	sql = """
 		select
 			uid,
@@ -34,7 +34,8 @@ def retrieveLBSRecords(spark, fr, to):
 		where
 			data_date between '{0}' and '{1}'
 			and from_unixtime(itime, 'yyyyMMdd') between '{0}' and '{1}'
-	""".format(fr, to)
+			and platform = '{2}'
+	""".format(fr, to, os)
 	print(sql)
 	records = spark.sql(sql)
 	return records
@@ -70,7 +71,7 @@ if __name__ == '__main__':
 	types = ['GPS', 'WIFI', 'CELL', 'IP']
 	result = {}
 	uids = retrieveUidInfo(spark, args.to, args.os)
-	records = retrieveLBSRecords(spark, args.fr, args.to)
+	records = retrieveLBSRecords(spark, args.fr, args.to, args.os)
 	records = records.join(uids, on=['uid'], how='inner').cache()
 	result['lbs_point_count'] = records.count()
 	result['lbs_gps_point_count'] = records.where(records.type == 'GPS').count()
@@ -102,9 +103,9 @@ if __name__ == '__main__':
 			F.mean('app_lbs_times').alias('avg_lbs_times_per_app_{0}'.format(t)), \
 			F.mean('app_lbs_device_count').alias('avg_lbs_device_per_app_{0}'.format(t))).collect()
 		print('=========>', t, apps_stats)
-		result['lbs_app_count_{0}'.format(t)] = devices_stats[0]['lbs_app_count_{0}'.format(t)]
-		result['avg_lbs_times_per_app_{0}'.format(t)] = devices_stats[0]['avg_lbs_times_per_app_{0}'.format(t)]
-		result['avg_lbs_device_per_app_{0}'.format(t)] = devices_stats[0]['avg_lbs_device_per_app_{0}'.format(t)]
+		result['lbs_app_count_{0}'.format(t)] = apps_stats[0]['lbs_app_count_{0}'.format(t)]
+		result['avg_lbs_times_per_app_{0}'.format(t)] = apps_stats[0]['avg_lbs_times_per_app_{0}'.format(t)]
+		result['avg_lbs_device_per_app_{0}'.format(t)] = apps_stats[0]['avg_lbs_device_per_app_{0}'.format(t)]
 	apps.unpersist()
 	
 	result = sc.parallelize([result]).map(transform_to_row).toDF()
