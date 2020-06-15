@@ -30,7 +30,7 @@ def retrieveActiveRecords(spark, fr, to, os):
 		select
 			uid
 		from
-			edw.active_user_log
+			ronghui.register_user_log
 		where
 			data_date between '{0}' and '{1}'
 			and from_unixtime(itime, 'yyyyMMdd') between '{0}' and {1}'

@@ -16,7 +16,7 @@ def retrieveUidInfo(spark, to, os):
 			package_name app_package,
 			{0} device_id
 		from
-			edw.user_register_log
+			ronghui.register_user_log
 		where
 			data_date <= '{1}'
 			and platform = '{2}'
