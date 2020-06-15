@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 
 from ConfigParser import RawConfigParser
-from datetime import datetime, timedelta
-from itertools import product
 from pyspark import SparkConf
 from pyspark.sql import functions as F
 from pyspark.sql import SparkSession
