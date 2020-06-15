@@ -16,7 +16,7 @@ def retrieveUidInfo(spark, to, os):
 			package_name app_package,
 			{0} device_id
 		from
-			edw.user_register_log
+			ronghui.register_user_log
 		where
 			data_date <= '{1}'
 			and platform = '{2}'
@@ -30,7 +30,7 @@ def retrieveActiveRecords(spark, fr, to, os):
 		select
 			uid
 		from
-			ronghui.register_user_log
+			edw.active_user_log
 		where
 			data_date between '{0}' and '{1}'
 			and from_unixtime(itime, 'yyyyMMdd') between '{0}' and {1}'
