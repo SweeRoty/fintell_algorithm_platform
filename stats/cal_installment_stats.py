@@ -57,7 +57,7 @@ if __name__ == '__main__':
 	result['new_installment_count'] = records.where(records.status == 2).count()
 	result['uninstallment_count'] = records.where(records.status == 0).count()
 
-	devices = records.repartition(10000, ['imei']).groupBy(['imei', 'status']).agg(\
+	devices = records.repartition(5000, ['imei']).groupBy(['imei', 'status']).agg(\
 		F.count(F.lit(1)).alias('device_installment_times'), \
 		F.approx_count_distinct('app_package', rsd=0.05).alias('device_installed_app_count')).cache()
 	for s in status:
@@ -78,7 +78,7 @@ if __name__ == '__main__':
 		result['avg_installed_app_per_device_{0}'.format(s)] = devices_stats[0]['avg_installed_app_per_device_{0}'.format(s)]
 	devices.unpersist()
 
-	apps = records.repartition(10000, ['app_package']).groupBy(['app_package', 'status']).agg(\
+	apps = records.repartition(1000, ['app_package']).groupBy(['app_package', 'status']).agg(\
 		F.count(F.lit(1)).alias('app_installment_times'), \
 		F.approx_count_distinct('imei', rsd=0.05).alias('app_installed_device_count')).cache()
 	for s in status:
