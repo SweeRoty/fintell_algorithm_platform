@@ -93,10 +93,10 @@ if __name__ == '__main__':
 		result['avg_lbs_app_per_device_{0}'.format(t)] = devices_stats[0]['avg_lbs_app_per_device_{0}'.format(t)]
 	devices.unpersist()
 
-	apps = records.repartition(5000, ['app_package']).groupBy(['app_package', 'type']).agg(\
+	apps = records.repartition(1000, ['app_package']).groupBy(['app_package', 'type']).agg(\
 		F.count(F.lit(1)).alias('app_lbs_times'), \
 		F.approx_count_distinct('device_id', rsd=0.05).alias('app_lbs_device_count')).cache()
-	apps.write.csv('/user/hive/warehouse/ronghui.db/rlab_stats_report/lbs/app_rank/{0}'.format(args.fr), header=True)
+	apps.repartition(100).write.csv('/user/hive/warehouse/ronghui.db/rlab_stats_report/lbs/app_rank/{0}'.format(args.fr), header=True)
 	for t in types:
 		apps_stats = apps.where(apps.type == t).agg(\
 			F.count(F.lit(1)).alias('lbs_app_count_{0}'.format(t)), \
