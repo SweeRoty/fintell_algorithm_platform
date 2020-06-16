@@ -1,0 +1,7 @@
+[spark-config]
+spark.yarn.queue = root.ronghui.preonline
+spark.dynamicAllocation.minExecutors = 50
+spark.dynamicAllocation.maxExecutors = 300
+spark.dynamicAllocation.initialExecutors = 100
+spark.executor.memory = 24g
+spark.yarn.executor.memoryOverhead = 32g
