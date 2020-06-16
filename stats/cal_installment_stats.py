@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 from ConfigParser import RawConfigParser
-from datetime import datetime, timedelta
 from pyspark import SparkConf
 from pyspark.sql import functions as F
 from pyspark.sql import SparkSession
@@ -13,16 +12,21 @@ def retrieveRawRecords(spark, fr, to):
 		select
 			imei,
 			package app_package,
-			name app_name,
 			status
 		from
 			edw.app_list_install_uninstall_fact
 		where
 			data_date between '{0}' and '{1}'
+			and status != 1
 	""".format(fr, to)
 	print(sql)
 	records = spark.sql(sql)
 	return records
+
+def transform_to_row(row_dict):
+	global args
+	row_dict['data_date'] = args.fr
+	return Row(**row_dict)
 
 if __name__ == '__main__':
 	print('====> Initializing Spark APP')
@@ -32,7 +36,7 @@ if __name__ == '__main__':
 	for t in localConf.items('spark-config'):
 		sparkConf.set(t[0], t[1])
 	spark = SparkSession.builder \
-			.appName('RLab_Stats_Report___Prepare_Installment_Data') \
+			.appName('RLab_Stats_Report___Cal_Installment_Stats') \
 			.config(conf=sparkConf) \
 			.enableHiveSupport() \
 			.getOrCreate()
@@ -41,46 +45,59 @@ if __name__ == '__main__':
 
 	print('====> Parsing local arguments')
 	parser = argparse.ArgumentParser()
-	parser.add_argument('--query_date', type=str)
-	parser.add_argument('--forward', type=int)
+	parser.add_argument('--fr', type=str)
+	parser.add_argument('--to', type=str)
 	args = parser.parse_args()
-	to = datetime.strptime(args.query_date, '%Y%m%d').date()+timedelta(days=args.forward)
-	to = to.strftime('%Y%m%d')
+	assert args.fr <= args.to
 
 	print('====> Start calculation')
+	status = [0, 2]
 	result = {}
-	records = retrieveRawRecords(spark, args.query_date, to).repartition(5000).cache()
-	result['newly_install_count'] = records.where(records.status == 2).count()
-	result['uninstall_count'] = records.where(records.status == 0).count()
+	records = retrieveRawRecords(spark, args.fr, args.to).cache()
+	result['new_installment_count'] = records.where(records.status == 2).count()
+	result['uninstallment_count'] = records.where(records.status == 0).count()
 
-	devices = records.groupBy(['imei', 'status']).agg(F.count(F.lit(1)).alias('device_install_times'), \
-		F.countDistinct('app_package').alias('device_install_app_count')).cache()
-	result['newly_installed_device_count'] = devices.where(devices.status == 2).count()	
-	devices_stats = devices.where(devices.status == 2).select(F.mean('device_install_times').alias('avg_newly_install_times_pd'), \
-		F.mean('device_install_app_count').alias('avg_newly_installed_app_pd')).collect()
-	result['avg_newly_install_times_pd'] = devices_stats[0]['avg_newly_install_times_pd']
-	result['avg_newly_installed_app_pd'] = devices_stats[0]['avg_newly_installed_app_pd']
-	result['uninstalled_device_count'] = devices.where(devices.status == 0).count()
-	devices_stats = devices.where(devices.status == 0).select(F.mean('device_install_times').alias('avg_uninstall_times_pd'), \
-		F.mean('device_install_app_count').alias('avg_uninstalled_app_pd')).collect()
-	result['avg_uninstall_times_pd'] = devices_stats[0]['avg_uninstall_times_pd']
-	result['avg_uninstalled_app_pd'] = devices_stats[0]['avg_uninstalled_app_pd']
+	devices = records.repartition(10000, ['imei']).groupBy(['imei', 'status']).agg(\
+		F.count(F.lit(1)).alias('device_installment_times'), \
+		F.approx_count_distinct('app_package', rsd=0.05).alias('device_installed_app_count')).cache()
+	for s in status:
+		devices_stats = None
+		if s != 1:
+			devices_stats = devices.where(devices.status == s).select(\
+				F.count(F.lit(1)).alias('device_count_{0}'.format(s)), \
+				F.mean('device_installment_times').alias('avg_installments_per_device_{0}'.format(s)), \
+				F.mean('device_installed_app_count').alias('avg_installed_app_per_device_{0}'.format(s))).collect()
+		else:
+			devices_stats = devices.where(devices.status >= s).select(\
+				F.count(F.lit(1)).alias('device_count_{0}'.format(s)), \
+				F.mean('device_installment_times').alias('avg_installments_per_device_{0}'.format(s)), \
+				F.mean('device_installed_app_count').alias('avg_installed_app_per_device_{0}'.format(s))).collect()
+		print('=========>', devices_stats)
+		result['device_count_{0}'.format(s)] = devices_stats[0]['device_count_{0}'.format(s)]
+		result['avg_installments_per_device_{0}'.format(s)] = devices_stats[0]['avg_installments_per_device_{0}'.format(s)]
+		result['avg_installed_app_per_device_{0}'.format(s)] = devices_stats[0]['avg_installed_app_per_device_{0}'.format(s)]
 	devices.unpersist()
 
-	apps = records.groupBy(['app_package', 'status']).agg(F.count(F.lit(1)).alias('app_install_times'), \
-		F.countDistinct('imei').alias('app_install_device_count')).cache()
-	result['newly_installed_app_count'] = apps.where(apps.status == 2).count()	
-	apps_stats = apps.where(apps.status == 2).select(F.mean('app_install_times').alias('avg_newly_install_times_pa'), \
-		F.mean('app_install_device_count').alias('avg_newly_installed_device_pa')).collect()
-	result['avg_newly_install_times_pa'] = apps_stats[0]['avg_newly_install_times_pa']
-	result['avg_newly_installed_device_pa'] = apps_stats[0]['avg_newly_installed_device_pa']
-	result['uninstalled_app_count'] = apps.where(apps.status == 0).count()
-	apps_stats = apps.where(apps.status == 0).select(F.mean('app_install_times').alias('avg_uninstall_times_pa'), \
-		F.mean('app_install_device_count').alias('avg_uninstalled_device_pd')).collect()
-	result['avg_uninstall_times_pa'] = apps_stats[0]['avg_uninstall_times_pa']
-	result['avg_uninstalled_device_pd'] = apps_stats[0]['avg_uninstalled_device_pd']
+	apps = records.repartition(10000, ['app_package']).groupBy(['app_package', 'status']).agg(\
+		F.count(F.lit(1)).alias('app_installment_times'), \
+		F.approx_count_distinct('imei', rsd=0.05).alias('app_installed_device_count')).cache()
+	for s in status:
+		apps_stats = None
+		if s != 1:
+			apps_stats = apps.where(apps.status == s).select(\
+				F.count(F.lit(1)).alias('app_count_{0}'.format(s)), \
+				F.mean('app_installment_times').alias('avg_installments_per_app_{0}'.format(s)), \
+				F.mean('app_installed_device_count').alias('avg_installed_device_per_app_{0}'.format(s))).collect()
+		else:
+			apps_stats = apps.where(apps.status >= s).select(\
+				F.count(F.lit(1)).alias('app_count_{0}'.format(s)), \
+				F.mean('app_installment_times').alias('avg_installments_per_app_{0}'.format(s)), \
+				F.mean('app_installed_device_count').alias('avg_installed_device_per_app_{0}'.format(s))).collect()
+		print('=========>', apps_stats)
+		result['app_count_{0}'.format(s)] = apps_stats[0]['app_count_{0}'.format(s)]
+		result['avg_installments_per_app_{0}'.format(s)] = apps_stats[0]['avg_installments_per_app_{0}'.format(s)]
+		result['avg_installed_device_per_app_{0}'.format(s)] = apps_stats[0]['avg_installed_device_per_app_{0}'.format(s)]
 	apps.unpersist()
 
-	result = spark.createDataFrame([result])
-	result = result.withColumn('data_date', F.lit(args.query_date))
-	result.repartition(1).write.csv('/user/hive/warehouse/ronghui.db/rlab_stats_report/installment/{0}'.format(args.query_date), header=True)
+	result = sc.parallelize([result]).map(transform_to_row).toDF()
+	result.repartition(1).write.csv('/user/hive/warehouse/ronghui.db/rlab_stats_report/installment/{0}'.format(args.fr), header=True)
