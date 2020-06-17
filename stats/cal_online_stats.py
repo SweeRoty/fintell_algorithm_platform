@@ -32,7 +32,7 @@ def retrieveOnlineRecords(spark, fr, to, os):
 			edw.online_user_log
 		where
 			data_date between '{0}' and '{1}'
-			and from_unixtime(itime, 'yyyyMMdd') between '{0}' and {1}'
+			and from_unixtime(itime, 'yyyyMMdd') between '{0}' and '{1}'
 			and platform = '{2}'
 	""".format(fr, to, os)
 	print(sql)
