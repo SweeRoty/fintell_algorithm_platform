@@ -84,7 +84,7 @@ if __name__ == '__main__':
 	result['avg_online_times_per_device'] = devices[0]['avg_online_times_per_device']
 	result['avg_online_app_per_device'] = devices[0]['avg_online_app_per_device']
 
-	apps = records.repartition(5000, ['app_package']).groupBy(['app_package']).agg(\
+	apps = records.repartition(1000, ['app_package']).groupBy(['app_package']).agg(\
 		F.count(F.lit(1)).alias('app_online_times'), \
 		F.approx_count_distinct('device_id', rsd=0.05).alias('app_online_device_count'))
 	apps = apps.select(\
