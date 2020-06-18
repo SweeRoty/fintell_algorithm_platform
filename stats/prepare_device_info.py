@@ -98,4 +98,4 @@ if __name__ == '__main__':
 	vers = retrieveVersions(spark, query_date)
 	vers = vers.withColumn('android_version', F.regexp_extract('sys_ver', '^(\d+)\.', 1)).drop('sys_ver')
 	active_devices = active_devices.join(vers, on=['imei'], how='left_outer')
-	active_devices.repartition(100).write.csv('/user/hive/warehouse/ronghui.db/rlab_stats_report/device/{0}'.format(args.query_month), header=True)
+	active_devices.repartition(100).write.csv('./hgy/rlab_stats_report/device/{0}'.format(args.query_month), header=True)
