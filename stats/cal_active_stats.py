@@ -28,7 +28,7 @@ def retrieveUidInfo(spark, to, os):
 def retrieveActiveRecords(spark, fr, to, os):
 	sql = """
 		select
-			md5(uid) uid
+			md5(cast(uid as string)) uid
 		from
 			edw.active_user_log
 		where
