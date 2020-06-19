@@ -27,7 +27,7 @@ def retrieveUidInfo(spark, to, os):
 def retrieveLBSRecords(spark, fr, to, os):
 	sql = """
 		select
-			uid,
+			md5(uid) uid,
 			coordinate_source type
 		from
 			edw.user_location_log
