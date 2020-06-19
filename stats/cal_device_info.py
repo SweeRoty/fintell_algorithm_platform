@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from __future__ import division
 from ConfigParser import RawConfigParser
 from pyspark.ml.feature import Bucketizer
 from pyspark import SparkConf
@@ -30,6 +31,10 @@ if __name__ == '__main__':
 		inputCol='price', outputCol='price_bin')
 	for month in ['202001', '202002', '202003', '202004', '202005']:
 		active_devices = spark.read.csv('hgy/rlab_stats_report/device/{0}'.format(month), header=True).cache()
+		android_10_count = active_devices.select(F.col('android_version').cast('int').alias('android_version')).where(\
+			F.col('android_version') == 10).count()
+		print('Android 10 count is: {0}'.format(android_10_count))
+		print('Android 10 ratio is: {0}'.format(round(android_10_count/active_devices.count(), 10)))
 		isp_stats = active_devices.where((active_devices.isp.contains('移动')) | (active_devices.isp.contains('联通')) | (active_devices.isp.contains('电信')))
 		isp_stats = isp_stats.groupBy(['isp']).agg(F.count(F.lit(1)).alias('isp_count')).collect()
 		print(isp_stats)
