@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from calendar import monthrange
 from ConfigParser import RawConfigParser
 from pyspark import SparkConf
 from pyspark.sql import functions as F
@@ -41,7 +42,7 @@ def retrieveOnlineRecords(spark, fr, to, os):
 
 def transform_to_row(row_dict):
 	global args
-	row_dict['data_date'] = args.fr
+	row_dict['data_date'] = args.query_month
 	return Row(**row_dict)
 
 if __name__ == '__main__':
@@ -61,16 +62,16 @@ if __name__ == '__main__':
 
 	print('====> Parsing local arguments')
 	parser = argparse.ArgumentParser()
-	parser.add_argument('--fr', type=str)
-	parser.add_argument('--to', type=str)
+	parser.add_argument('--query_month', type=str)
 	parser.add_argument('--os', choices=['a', 'i'])
 	args = parser.parse_args()
-	assert args.fr <= args.to
+	fr = args.query_month+'01'
+	to = args.query_month+str(monthrange(int(args.query_month[:4]), int(args.query_month[4:]))[1])
 
 	print('====> Start calculation')
 	result = {}
-	uids = retrieveUidInfo(spark, args.to, args.os)
-	records = retrieveOnlineRecords(spark, args.fr, args.to, args.os)
+	uids = retrieveUidInfo(spark, to, args.os)
+	records = retrieveOnlineRecords(spark, fr, to, args.os)
 	records = records.join(uids, on=['uid'], how='left_outer').cache()
 
 	devices = records.repartition(5000, ['device_id']).groupBy(['device_id']).agg(\
@@ -96,4 +97,4 @@ if __name__ == '__main__':
 	result['avg_online_device_per_app'] = apps[0]['avg_online_device_per_app']
 
 	result = sc.parallelize([result]).map(transform_to_row).toDF()
-	result.repartition(1).write.csv('/user/hive/warehouse/ronghui.db/rlab_stats_report/online/{0}'.format(args.fr), header=True)
+	result.repartition(1).write.csv('/user/hive/warehouse/ronghui.db/rlab_stats_report/online/{0}'.format(args.query_month), header=True)
