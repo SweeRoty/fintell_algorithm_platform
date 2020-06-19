@@ -27,7 +27,7 @@ def retrieveUidInfo(spark, to, os):
 def retrieveOnlineRecords(spark, fr, to, os):
 	sql = """
 		select
-			uid
+			md5(uid) uid
 		from
 			edw.online_user_log
 		where
