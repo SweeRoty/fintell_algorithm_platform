@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from calendar import monthrange
 from ConfigParser import RawConfigParser
 from pyspark import SparkConf
 from pyspark.sql import functions as F
@@ -10,7 +11,7 @@ import argparse
 def retrieveRawRecords(spark, fr, to):
 	sql = """
 		select
-			imei,
+			md5(cast(imei as string)) imei,
 			package app_package,
 			status
 		from
@@ -18,6 +19,7 @@ def retrieveRawRecords(spark, fr, to):
 		where
 			data_date between '{0}' and '{1}'
 			and status != 1
+			and from_unixtime(last_report_time, 'yyyyMMdd') = data_date
 	""".format(fr, to)
 	print(sql)
 	records = spark.sql(sql)
@@ -25,7 +27,7 @@ def retrieveRawRecords(spark, fr, to):
 
 def transform_to_row(row_dict):
 	global args
-	row_dict['data_date'] = args.fr
+	row_dict['data_date'] = args.query_month
 	return Row(**row_dict)
 
 if __name__ == '__main__':
@@ -45,15 +47,17 @@ if __name__ == '__main__':
 
 	print('====> Parsing local arguments')
 	parser = argparse.ArgumentParser()
-	parser.add_argument('--fr', type=str)
-	parser.add_argument('--to', type=str)
+	parser.add_argument('--query_month', type=str)
 	args = parser.parse_args()
-	assert args.fr <= args.to
+	fr = args.query_month+'01'
+	to = args.query_month+str(monthrange(int(args.query_month[:4]), int(args.query_month[4:]))[1])
 
 	print('====> Start calculation')
 	status = [0, 2]
 	result = {}
-	records = retrieveRawRecords(spark, args.fr, args.to).cache()
+	records = retrieveRawRecords(spark, fr, to)
+	devices = spark.read.csv('hgy/rlab_stats_report/active_devices/{0}/sampled_imei_list'.format(args.query_month), header=True)
+	records = records.join(devices, on=['imei'], how='inner').cache()
 	result['new_installment_count'] = records.where(records.status == 2).count()
 	result['uninstallment_count'] = records.where(records.status == 0).count()
 
@@ -100,4 +104,4 @@ if __name__ == '__main__':
 	apps.unpersist()
 
 	result = sc.parallelize([result]).map(transform_to_row).toDF()
-	result.repartition(1).write.csv('/user/hive/warehouse/ronghui.db/rlab_stats_report/installment/{0}'.format(args.fr), header=True)
+	result.repartition(1).write.csv('/user/hive/warehouse/ronghui.db/rlab_stats_report/installment/{0}'.format(args.query_month), header=True)
