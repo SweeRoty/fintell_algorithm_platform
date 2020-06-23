@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from calendar import monthrange
 from ConfigParser import RawConfigParser
 from pyspark import SparkConf
 from pyspark.sql import functions as F
@@ -27,7 +28,7 @@ def retrieveUidInfo(spark, to, os):
 def retrieveLBSRecords(spark, fr, to, os):
 	sql = """
 		select
-			md5(uid) uid,
+			md5(cast(uid as string)) uid,
 			coordinate_source type
 		from
 			edw.user_location_log
@@ -42,7 +43,7 @@ def retrieveLBSRecords(spark, fr, to, os):
 
 def transform_to_row(row_dict):
 	global args
-	row_dict['data_date'] = args.fr
+	row_dict['data_date'] = args.query_month
 	return Row(**row_dict)
 
 if __name__ == '__main__':
@@ -61,17 +62,17 @@ if __name__ == '__main__':
 
 	print('====> Parsing local arguments')
 	parser = argparse.ArgumentParser()
-	parser.add_argument('--fr', type=str)
-	parser.add_argument('--to', type=str)
+	parser.add_argument('--query_month', type=str)
 	parser.add_argument('--os', choices=['a', 'i'])
 	args = parser.parse_args()
-	assert args.fr <= args.to
+	fr = args.query_month+'01'
+	to = args.query_month+str(monthrange(int(args.query_month[:4]), int(args.query_month[4:]))[1])
 
 	print('====> Start calculation')
 	types = ['GPS', 'WIFI', 'CELL', 'IP']
 	result = {}
-	uids = retrieveUidInfo(spark, args.to, args.os)
-	records = retrieveLBSRecords(spark, args.fr, args.to, args.os)
+	uids = retrieveUidInfo(spark, to, args.os)
+	records = retrieveLBSRecords(spark, fr, to, args.os)
 	records = records.join(uids, on=['uid'], how='inner').cache()
 	result['lbs_point_count'] = records.count()
 	result['lbs_gps_point_count'] = records.where(records.type == 'GPS').count()
@@ -96,7 +97,7 @@ if __name__ == '__main__':
 	apps = records.repartition(1000, ['app_package']).groupBy(['app_package', 'type']).agg(\
 		F.count(F.lit(1)).alias('app_lbs_times'), \
 		F.approx_count_distinct('device_id', rsd=0.05).alias('app_lbs_device_count')).cache()
-	apps.repartition(100).write.csv('/user/hive/warehouse/ronghui.db/rlab_stats_report/lbs/app_rank/{0}'.format(args.fr), header=True)
+	apps.repartition(100).write.csv('/user/hive/warehouse/ronghui.db/rlab_stats_report/lbs/app_rank/{0}'.format(args.query_month), header=True)
 	for t in types:
 		apps_stats = apps.where(apps.type == t).agg(\
 			F.count(F.lit(1)).alias('lbs_app_count_{0}'.format(t)), \
@@ -109,4 +110,4 @@ if __name__ == '__main__':
 	apps.unpersist()
 	
 	result = sc.parallelize([result]).map(transform_to_row).toDF()
-	result.repartition(1).write.csv('/user/hive/warehouse/ronghui.db/rlab_stats_report/lbs/{0}'.format(args.fr), header=True)
+	result.repartition(1).write.csv('/user/hive/warehouse/ronghui.db/rlab_stats_report/lbs/{0}'.format(args.query_month), header=True)
