@@ -93,7 +93,7 @@ if __name__ == '__main__':
 	active_androids = getActiveAndroids(spark, query_date)
 	abnormal_androids = getAbnormalAndroids(spark, query_date)
 	active_androids = active_androids.join(abnormal_androids, on=['imei'], how='left_outer').cache()
-	active_androids.where(active_androids.flag.isNull()).drop('flag').sample(False, 0.02, 1003).repartition(50).\
+	active_androids.where(active_androids.flag.isNull()).drop('flag').sample(False, 0.05, 1003).repartition(50).\
 		write.csv('./hgy/rlab_stats_report/active_devices/{0}/sampled_imei_list'.format(args.query_month), header=True)
 	##print(active_androids.count())
 	##print(active_androids.select('imei').distinct().count())
