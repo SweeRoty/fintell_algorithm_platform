@@ -119,7 +119,7 @@ if __name__ == '__main__':
 	result['lbs_cell_point_count'] = records.where(records.type == 'CELL').count()
 	result['lbs_ip_point_count'] = records.where(records.type == 'IP').count()
 
-	devices = records.repartition(5000, ['device_id']).groupBy(['device_id', 'type']).agg(\
+	devices = records.repartition(1000, ['device_id']).groupBy(['device_id', 'type']).agg(\
 		F.count(F.lit(1)).alias('device_lbs_times'), \
 		F.approx_count_distinct('app_package', rsd=0.05).alias('device_lbs_app_count')).cache()
 	for t in types:
