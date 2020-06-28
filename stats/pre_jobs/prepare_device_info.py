@@ -21,6 +21,34 @@ def retrieveActiveDevices(spark, query_date):
 	devices = spark.sql(sql)
 	return devices
 
+def getAbnormalAndroids(spark, query_date):
+	sql = """
+		select
+			imei,
+			shanzhai_flag flag
+		from
+			ronghui_mart.sz_device_list
+		where
+			data_date = '{0}'
+	""".format(query_date)
+	print(sql)
+	devices = spark.sql(sql)
+	return devices
+
+def retrieveISPs(spark, query_date):
+	sql = """
+		select
+			imei,
+			isp
+		from
+			ronghui_mart.rt_device_isp
+		where
+			data_date = '{0}'
+	""".format(query_date)
+	print(sql)
+	isps = spark.sql(sql)
+	return isps
+
 def retrieveProperties(spark, query_date):
 	sql = """
 		select
@@ -38,30 +66,24 @@ def retrieveProperties(spark, query_date):
 	props = spark.sql(sql)
 	return props
 
-def retrieveISPs(spark, query_date):
-	sql = """
-		select
-			imei,
-			isp
-		from
-			ronghui_mart.rt_device_isp
-		where
-			data_date = '{0}'
-	""".format(query_date)
-	print(sql)
-	isps = spark.sql(sql)
-	return isps
-
 def retrieveVersions(spark, query_date):
 	sql = """
 		select
+			tmp.imei imei,
+			tmp.sys_ver sys_ver
+		from
+		(select
 			imei,
-			sys_ver
+			sys_ver,
+			row_number() over(partition by imei order by itime desc) row_num
 		from
 			ronghui.register_user_log
 		where
 			data_date <= '{0}'
 			and platform = 'a'
+		) tmp
+		where
+			tmp.row_num = 1
 	""".format(query_date)
 	print(sql)
 	vers = spark.sql(sql)
@@ -91,11 +113,14 @@ if __name__ == '__main__':
 
 	print('====> Start calculation')
 	active_devices = retrieveActiveDevices(spark, query_date)
-	props = retrieveProperties(spark, query_date)
-	active_devices = active_devices.join(props, on=['imei'], how='left_outer')
+	abnormal_androids = getAbnormalAndroids(spark, query_date)
+	active_devices = active_devices.join(abnormal_androids, on=['imei'], how='left_outer')
+	active_devices = active_devices.where(active_devices.flag.isNull()).drop('flag')
 	isps = retrieveISPs(spark, query_date)
 	active_devices = active_devices.join(isps, on=['imei'], how='left_outer')
+	props = retrieveProperties(spark, query_date)
+	active_devices = active_devices.join(props, on=['imei'], how='left_outer')
 	vers = retrieveVersions(spark, query_date)
 	vers = vers.withColumn('android_version', F.regexp_extract('sys_ver', '^(\d+)\.', 1)).drop('sys_ver')
 	active_devices = active_devices.join(vers, on=['imei'], how='left_outer')
-	active_devices.repartition(100).write.csv('./hgy/rlab_stats_report/device/{0}'.format(args.query_month), header=True)
+	active_devices.repartition(100).write.csv('./hgy/rlab_stats_report/device_info/{0}'.format(args.query_month), header=True)
