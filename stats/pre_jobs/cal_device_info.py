@@ -30,7 +30,7 @@ if __name__ == '__main__':
 	bucketizer = Bucketizer(splits=[0, 500, 1000, 1500, 2000, 2500, 3000, 4000, 5000, float('Inf')], \
 		inputCol='price', outputCol='price_bin')
 	for month in ['202001', '202002', '202003', '202004', '202005']:
-		active_devices = spark.read.csv('hgy/rlab_stats_report/device/{0}'.format(month), header=True).cache()
+		active_devices = spark.read.csv('hgy/rlab_stats_report/device_info/{0}'.format(month), header=True).cache()
 		android_10_count = active_devices.select(F.col('android_version').cast('int').alias('android_version')).where(\
 			F.col('android_version') == 10).count()
 		print('Android 10 count is: {0}'.format(android_10_count))
