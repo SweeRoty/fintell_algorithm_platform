@@ -1,5 +1,5 @@
 [spark-config]
-spark.yarn.queue = root.ronghui.preonline
+spark.yarn.queue = root.partner.ronghui.preonline
 spark.dynamicAllocation.minExecutors = 50
 spark.dynamicAllocation.maxExecutors = 1000
 spark.dynamicAllocation.initialExecutors = 100
