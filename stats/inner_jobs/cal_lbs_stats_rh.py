@@ -107,7 +107,7 @@ if __name__ == '__main__':
 		uid_idfa = uid_idfa.join(apps, on=['app_key'], how='inner').drop('app_key').select(['uid', 'app_package', 'device_id'])
 		uids = uids.union(uids)
 	else:
-		devices = spark.read.csv('hgy/rlab_stats_report/active_devices/{0}/sampled_imei_list'.format(args.query_month), header=True)\
+		devices = spark.read.csv('hgy/rlab_stats_report/sampled_devices/{0}'.format(args.query_month), header=True)\
 					.select(F.col('imei').alias('device_id'))
 		uids = uids.join(devices, on=['device_id'], how='inner')
 

@@ -56,7 +56,7 @@ if __name__ == '__main__':
 	status = [0, 2]
 	result = {}
 	records = retrieveRawRecords(spark, fr, to)
-	devices = spark.read.csv('/user/ronghui_safe/hgy/rlab_stats_report/active_devices/{0}/sampled_imei_list'.format(args.query_month), header=True)
+	devices = spark.read.csv('/user/ronghui_safe/hgy/rlab_stats_report/sampled_devices/{0}'.format(args.query_month), header=True)
 	records = records.join(devices, on=['imei'], how='inner').cache()
 	result['new_installment_count'] = records.where(records.status == 2).count()
 	result['uninstallment_count'] = records.where(records.status == 0).count()
