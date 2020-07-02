@@ -33,7 +33,7 @@ if __name__ == '__main__':
 	bucketizer = Bucketizer(splits=[0, 500, 1000, 1500, 2000, 2500, 3000, 4000, 5000, float('Inf')], \
 		inputCol='price', outputCol='price_bin')
 
-	active_devices = spark.read.csv('hgy/rlab_stats_report/device_info/{0}_1'.format(args.query_month), header=True).cache()
+	active_devices = spark.read.csv('hgy/rlab_stats_report/device_info/{0}'.format(args.query_month), header=True).cache()
 	n = active_devices.count()
 	print('=========> Total number of active devices is {0}'.format(n))
 
