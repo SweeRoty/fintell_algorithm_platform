@@ -1,5 +1,5 @@
 [spark-config]
-spark.yarn.queue = root.ronghui.adhoc
+spark.yarn.queue = root.partner.ronghui.adhoc
 spark.cores.max = 128
 spark.executor.cores = 4
 spark.executor.memory = 16g
