@@ -20,6 +20,10 @@ def retrieveRawRecords(spark, fr, to):
 			data_date between '{0}' and '{1}'
 			and status >= 1
 			and from_unixtime(last_report_time, 'yyyyMMdd') = data_date
+			and imei is not null
+			and imei != ''
+			and package is not null
+			and package != ''
 	""".format(fr, to)
 	print(sql)
 	records = spark.sql(sql)
