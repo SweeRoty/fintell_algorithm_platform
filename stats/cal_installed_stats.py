@@ -11,7 +11,7 @@ import argparse
 def retrieveRawRecords(spark, fr, to):
 	sql = """
 		select
-			md5(cast(imei as string)) imei,
+			distinct md5(cast(imei as string)) imei,
 			package app_package,
 			data_date
 		from
