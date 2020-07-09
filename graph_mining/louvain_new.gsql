@@ -1,0 +1,205 @@
+use graph social_test
+drop query louvain_parallel
+
+CREATE QUERY louvain_parallel(INT iter1 = 10, INT iter2 = 10) FOR GRAPH social_test {
+    TYPEDEF TUPLE <INT csize, INT number> ClusterNum;
+    TYPEDEF TUPLE <VERTEX node, INT cid, FLOAT deltaQ> vDeltaQ;
+
+    SumAccum<FLOAT> @@totalWeight, @@totalWeight_merge;
+    SumAccum<FLOAT> @@modularity;
+    MapAccum<INT, FLOAT> @@totIncidentCluster; ## sum of weight incident to clusters
+    MapAccum<INT, MinAccum<VERTEX>> @@representMap;
+    SetAccum<VERTEX> @@representSet;
+    MapAccum<INT, MapAccum<INT, FLOAT>> @@weightToClusterMap; ## calculate edges between communities
+    MapAccum<INT, MinAccum<INT>> @@moveComm; ## map of communities that changed its community id
+    #MapAccum<INT, INT> @@clusterSizes; ## size of a cluster
+
+    SumAccum<FLOAT> @weight; ## total weight incident to this vertex
+    SumAccum<INT> @cid, @cid_new; ## which cluster it belongs to
+    SumAccum<INT> @vid; ## internal id
+    HeapAccum<vDeltaQ>(1, deltaQ DESC, cid ASC) @largestDeltaQ; ## if deltaQ is the same, select the one with mininal vid
+    MapAccum<INT, FLOAT> @weightToCluster; ## weight from one vertex incident to that cluster
+    SumAccum<FLOAT> @cweight; ## total weight incident to this aggregate vertex
+
+    INT iteration;
+    FLOAT last_modularity = 0;
+    FLOAT epsilon = 0.0001;
+    INT Iter1;
+    INT iteration2;
+    FLOAT last_modularity2 = 0;
+
+    # Initialize: count edges and set a unique cluster ID for each vertex
+    Start = {Person.*};
+    S = SELECT s
+        FROM Start:s -(Coworker:e)- :t
+        ACCUM
+            @@totalWeight += e.weight,
+            s.@weight += e.weight
+        POST-ACCUM
+            s.@vid = getvid(s),
+            #s.@uid = s.@vid,
+            s.@cid = s.@vid;  ## Label each vertex with its own internal ID
+
+    # Special first iteration of Phase 1
+    iteration = 1;
+    S = SELECT s
+        FROM Start:s -(:e)- :t
+        WHERE s.@cid > t.@cid
+        ACCUM
+            # weightToCluster is just e.weight
+            s.@largestDeltaQ += vDeltaQ(t, t.@cid, e.weight/@@totalWeight-s.@weight*t.@weight/(2*@@totalWeight*@@totalWeight))
+        POST-ACCUM
+            INT bestCluster = s.@largestDeltaQ.top().cid,
+            IF s.@largestDeltaQ.size() > 0 and s.@largestDeltaQ.top().deltaQ > 0 and s.@cid != bestCluster THEN
+                s.@cid = bestCluster
+            END,
+            s.@largestDeltaQ.clear();
+
+    S = SELECT s
+        FROM Start:s-(:e)-:t
+        WHERE s.@cid == t.@cid
+        ACCUM
+            @@modularity += e.weight/(2*@@totalWeight)-s.@weight*t.@weight/(4*@@totalWeight*@@totalWeight);
+
+    PRINT iteration AS Phase1Iter, @@modularity;
+
+    S = SELECT s
+        FROM Start:s
+        ACCUM @@totIncidentCluster += (s.@cid -> s.@weight);
+    print S;
+
+    # Phase 1
+    iteration = 1;
+    Iter1 = iter1 - 1;
+
+    WHILE (iteration < 2 OR @@modularity - last_modularity > epsilon) LIMIT Iter1 DO
+        iteration = iteration + 1;
+
+        S = SELECT s
+            FROM Start:s -(:e)- :t
+            # At least one cluster not singlet(a cluster on its own). If both clusters are singlets, consider only when the label of target is smaller to avoid swap
+            WHERE
+                (abs(s.@weight - @@totIncidentCluster.get(s.@cid)) > epsilon ## s is not a singlet
+                OR abs(t.@weight - @@totIncidentCluster.get(t.@cid)) > epsilon ## or t is not a singlet
+                OR (s.@cid > t.@cid)) ## consider only when target label is smaller
+                AND t.outdegree() != 1
+            ACCUM
+                s.@weightToCluster += (t.@cid -> e.weight)
+            POST-ACCUM
+                INT bestCluster = s.@cid,
+                FLOAT maxDeltaQ = 0.0,
+                FLOAT deltaQ_new = 0.0,
+                FOREACH (cluster, weightToC) IN s.@weightToCluster DO ##would be better if this can be distributed
+                    FLOAT incident = @@totIncidentCluster.get(cluster),
+                    deltaQ_new = weightToC - 2 * incident * s.@weight/ @@totalWeight,
+                    # when deltaQ_new is equal to maxDeltaQ, and the cluster label is smaller, also change
+                    IF deltaQ_new > maxDeltaQ OR (abs(deltaQ_new - maxDeltaQ) < epsilon AND cluster < bestCluster) THEN
+                        maxDeltaQ = deltaQ_new,
+                        bestCluster = cluster
+                    END
+                END,
+                IF s.@cid != bestCluster THEN
+                    @@totIncidentCluster += (s.@cid -> (-1 * s.@weight)),
+                    @@totIncidentCluster += (bestCluster -> s.@weight),
+                    s.@cid = bestCluster
+                END,
+                s.@weightToCluster.clear();
+
+        last_modularity = @@modularity;
+        @@modularity = 0;
+        T1 = SELECT s
+            FROM Start:s-(:e)-:t
+            WHERE s.@cid == t.@cid
+            ACCUM
+                @@modularity += e.weight/(2*@@totalWeight)-s.@weight*t.@weight/(4*@@totalWeight*@@totalWeight);
+                   
+        PRINT iteration AS Phase1Iter, @@modularity;
+    END;
+
+    # Phase 2
+    iteration2 = 0;
+    @@totalWeight_merge = @@totalWeight;
+
+    WHILE (iteration2 < 2 OR @@modularity - last_modularity > epsilon) LIMIT iter2 DO
+        iteration2 = iteration2 + 1;
+
+        # Select the vertices with minimal internal id to represent the coarsened graph
+        Start = SELECT s
+                FROM Start:s
+                POST-ACCUM
+                    @@representMap += (s.@cid -> s),
+                    s.@cid_new = s.@cid;
+
+        FOREACH (key, value) IN @@representMap DO
+            @@representSet += value;
+        END;
+        
+        represent = {@@representSet};
+
+        @@totalWeight_merge = 0;
+        @@totIncidentCluster.clear();
+        @@representMap.clear();
+        @@representSet.clear();
+        @@weightToClusterMap.clear();
+        @@moveComm.clear();
+
+        S = SELECT s
+            FROM Start:s -(:e)- :t
+            ACCUM
+                case when s.@cid != t.@cid then
+                    @@totIncidentCluster += (s.@cid -> e.weight),
+                    @@totalWeight_merge += e.weight/2,
+                    case when s.@cid > t.@cid then
+                        @@weightToClusterMap += (s.@cid -> (t.@cid -> e.weight))
+                    end
+                end
+            post-accum
+                # from s, incident to some clusters. Not consider the same cluster
+                s.@cweight += @@totIncidentCluster.get(s.@cid);
+
+        if @@totalWeight_merge == 0 then
+            break;
+        end;
+
+        represent = SELECT s
+                    FROM represent:s
+                    POST-ACCUM
+                        INT bestCluster = s.@cid,
+                        FLOAT maxDeltaQ = 0.0,
+                        FLOAT deltaQ_new = 0.0,
+                        INT  maxWeightToC = 0,
+                        FOREACH (cluster, weightToC) IN @@weightToClusterMap.get(s.@cid) DO
+                            deltaQ_new = weightToC/@@totalWeight_merge - 
+                            (@@totIncidentCluster.get(cluster)*s.@cweight)/(2*@@totalWeight_merge*@@totalWeight_merge),
+                            IF deltaQ_new > maxDeltaQ OR (abs(deltaQ_new - maxDeltaQ) < epsilon AND cluster < bestCluster) THEN
+                                maxDeltaQ = deltaQ_new,
+                                bestCluster = cluster,
+                                maxWeightToC = weightToC
+                            END
+                        END,
+                        IF s.@cid != bestCluster THEN
+                            @@moveComm += (s.@cid -> bestCluster)
+                        END;
+
+        # move nodes
+        S = SELECT s
+            FROM Start:s
+            WHERE @@moveComm.containsKey(s.@cid)
+            POST-ACCUM s.@cid_new = @@moveComm.get(s.@cid);
+
+        last_modularity = @@modularity;
+        @@modularity = 0;
+        T1 = SELECT s
+            FROM Start:s-(:e)-:t
+            WHERE s.@cid_new == t.@cid_new
+            ACCUM
+                @@modularity += e.weight/(2*@@totalWeight)-s.@weight*t.@weight/(4*@@totalWeight*@@totalWeight);
+
+        PRINT iteration2 AS Phase2Iter, @@modularity;
+
+    END;
+}
+
+set query_timeout=180000
+INSTALL QUERY louvain_parallel
+run query louvain_parallel(10, 10)
