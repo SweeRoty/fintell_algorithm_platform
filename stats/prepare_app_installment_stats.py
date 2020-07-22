@@ -80,7 +80,7 @@ if __name__ == '__main__':
 		F.count(F.lit(1)).alias('app_installment_times'), \
 		F.approx_count_distinct('imei', rsd=0.05).alias('app_installed_device_count'))
 	##records.unpersist()
-	apps.repartition(100).write.csv('/user/hive/warehouse/ronghui.db/rlab_stats_report/installment/app_rank/{0}'.format(args.query_month), header=True)
+	apps.repartition(200).write.csv('/user/hive/warehouse/ronghui.db/rlab_stats_report/installment/app_rank/{0}'.format(args.query_month), header=True)
 
 	#result['new_installment_count'] = records.where(records.status == 2).count()
 	#result['uninstallment_count'] = records.where(records.status == 0).count()
