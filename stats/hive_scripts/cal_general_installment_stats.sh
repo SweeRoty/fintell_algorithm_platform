@@ -23,7 +23,7 @@ select
 	count(distinct package) app_count,
 	$status status
 from
-	ronghui.mx_ori_app_list_fact
+	edw.app_list_install_uninstall_fact
 where
 	data_date between '$fr' and '$to'
 	and status = $status
