@@ -55,7 +55,7 @@ if __name__ == '__main__':
 	for t in localConf.items('spark-config'):
 		sparkConf.set(t[0], t[1])
 	spark = SparkSession.builder \
-			.appName('RLab_Stats_Report___Cal_Installed_Stats') \
+			.appName('RLab_Stats_Report___Cal_Installed_Stats_for_Device') \
 			.config(conf=sparkConf) \
 			.enableHiveSupport() \
 			.getOrCreate()
@@ -78,20 +78,12 @@ if __name__ == '__main__':
 	devices = spark.read.csv('/user/ronghui_safe/hgy/rlab_stats_report/sampled_devices/{0}'.format(args.query_month), header=True)
 	'''
 	devices = loadSampledDevices(spark, args.query_month)
-	records = records.join(devices, on=['imei'], how='inner').cache()
+	records = records.join(devices, on=['imei'], how='inner')
 
 	devices = records.repartition(750, ['imei']).rdd.map(lambda row: ('{0}_{1}'.format(row['imei'], row['data_date']), 1)).reduceByKey(lambda x, y: x+y)
 	devices = devices.map(lambda t: (t[0].split('_')[0], (t[1], 1))).reduceByKey(lambda a, b: (a[0]+b[0], a[1]+b[1])).mapValues(lambda t: t[0]*1.0/t[1])
 	device_stats = devices.map(lambda t: (t[1], 1)).reduce(lambda a, b: (a[0]+b[0], a[1]+b[1]))
 	result['avg_daily_installed_app_count'] = device_stats[0]*1.0/device_stats[1]
-
-	'''
-	apps = records.repartition(500, ['app_package']).groupBy(['app_package', 'data_date']).agg(\
-		F.count(F.lit(1)).alias('installed_device_count'))
-	apps = apps.groupBy(['app_package']).agg(F.mean('installed_device_count').alias('daily_installed_device_count')).cache()
-	records.unpersist()
-	apps.repartition(100).write.csv('/user/hive/warehouse/ronghui.db/rlab_stats_report/installed/app_rank/{0}'.format(args.query_month), header=True)
-	'''
 
 	result = sc.parallelize([result]).map(transform_to_row).toDF()
 	result.repartition(1).write.csv('/user/hive/warehouse/ronghui.db/rlab_stats_report/installed/{0}'.format(args.query_month), header=True)
