@@ -29,6 +29,19 @@ def retrieveRawRecords(spark, fr, to):
 	records = spark.sql(sql)
 	return records
 
+def loadSampledDevices(spark, query_month):
+	sql = """
+		select
+			imei
+		from
+			ronghui.hgy_01
+		where
+			data_date = '{0}'
+	""".format(query_month)
+	print(sql)
+	devices = spark.sql(sql)
+	return devices
+
 def transform_to_row(row_dict):
 	global args
 	row_dict['data_date'] = args.query_month
@@ -59,21 +72,26 @@ if __name__ == '__main__':
 	print('====> Start calculation')
 	result = {}
 	records = retrieveRawRecords(spark, fr, to)
+	'''
+	records = records.withColumn('sampling_index', F.col('imei')%25)
+	records = records.sampleBy('sampling_index', fractions={1:1}, seed=1003).drop('sampling_index')
 	devices = spark.read.csv('/user/ronghui_safe/hgy/rlab_stats_report/sampled_devices/{0}'.format(args.query_month), header=True)
+	'''
+	devices = loadSampledDevices(spark, args.query_month)
 	records = records.join(devices, on=['imei'], how='inner').cache()
 
-	devices = records.repartition(1000, ['imei']).groupBy(['imei', 'data_date']).agg(\
-		F.count(F.lit(1)).alias('installed_app_count'))
-	devices = devices.groupBy(['imei']).agg(F.mean('installed_app_count').alias('daily_installed_app_count'))
-	devices = devices.select(F.mean('daily_installed_app_count').alias('avg_daily_installed_app_count')).collect()
-	result['avg_daily_installed_app_count'] = devices[0]['avg_daily_installed_app_count']
+	devices = records.repartition(750, ['imei']).rdd.map(lambda row: ('{0}_{1}'.format(row['imei'], row['data_date']), 1)).reduceByKey(lambda x, y: x+y)
+	devices = devices.map(lambda t: (t[0].split('_')[0], (t[1], 1))).reduceByKey(lambda a, b: (a[0]+b[0], a[1]+b[1])).mapValues(lambda t: t[0]*1.0/t[1])
+	device_stats = devices.map(lambda t: (t[1], 1)).reduce(lambda a, b: (a[0]+b[0], a[1]+b[1]))
+	result['avg_daily_installed_app_count'] = device_stats[0]*1.0/device_stats[1]
 
-	apps = records.repartition(1000, ['app_package']).groupBy(['app_package', 'data_date']).agg(\
+	'''
+	apps = records.repartition(500, ['app_package']).groupBy(['app_package', 'data_date']).agg(\
 		F.count(F.lit(1)).alias('installed_device_count'))
-	apps = apps.groupBy(['app_package']).agg(F.mean('installed_device_count').alias('daily_installed_device_count'))
+	apps = apps.groupBy(['app_package']).agg(F.mean('installed_device_count').alias('daily_installed_device_count')).cache()
+	records.unpersist()
 	apps.repartition(100).write.csv('/user/hive/warehouse/ronghui.db/rlab_stats_report/installed/app_rank/{0}'.format(args.query_month), header=True)
-	apps = apps.select(F.mean('daily_installed_device_count').alias('avg_daily_installed_device_count')).collect()
-	result['avg_daily_installed_device_count'] = apps[0]['avg_daily_installed_device_count']
+	'''
 
 	result = sc.parallelize([result]).map(transform_to_row).toDF()
 	result.repartition(1).write.csv('/user/hive/warehouse/ronghui.db/rlab_stats_report/installed/{0}'.format(args.query_month), header=True)
