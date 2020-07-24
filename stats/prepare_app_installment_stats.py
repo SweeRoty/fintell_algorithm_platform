@@ -42,10 +42,9 @@ def retrieveRawRecords(spark, fr, to):
 	records = spark.sql(sql)
 	return records
 
-def transform_to_row(row_dict):
-	global args
-	row_dict['data_date'] = args.query_month
-	return Row(**row_dict)
+def transform_to_row(t):
+	app_package, status = t[0].split('sweeroty')
+	return Row(app_package=app_package, status=int(status), count=int(t[1]))
 
 if __name__ == '__main__':
 	print('====> Initializing Spark APP')
@@ -70,49 +69,8 @@ if __name__ == '__main__':
 	to = args.query_month+str(monthrange(int(args.query_month[:4]), int(args.query_month[4:]))[1])
 
 	print('====> Start calculation')
-	##status = [0, 2]
-	##result = {}
 	records = retrieveRawRecords(spark, fr, to)
-	#devices = spark.read.csv('/user/ronghui_safe/hgy/rlab_stats_report/sampled_devices/{0}'.format(args.query_month), header=True)
 	devices = loadSampledDevices(spark, args.query_month)
 	records = records.join(devices, on=['imei'], how='inner')
-	apps = records.repartition(200, ['app_package']).groupBy(['app_package', 'status']).agg(\
-		F.count(F.lit(1)).alias('app_installment_times'), \
-		F.approx_count_distinct('imei', rsd=0.05).alias('app_installed_device_count'))
-	##records.unpersist()
-	apps.repartition(200).write.csv('/user/hive/warehouse/ronghui.db/rlab_stats_report/installment/app_rank/{0}'.format(args.query_month), header=True)
-
-	#result['new_installment_count'] = records.where(records.status == 2).count()
-	#result['uninstallment_count'] = records.where(records.status == 0).count()
-	'''
-	for s in status:
-		devices = records.repartition(1000, ['imei']).where(F.col('status') == s).groupBy(['imei']).agg(\
-			F.count(F.lit(1)).alias('device_installment_times'), \
-			F.approx_count_distinct('app_package', rsd=0.05).alias('device_installed_app_count'))
-		devices_stats = devices.select(\
-			F.count(F.lit(1)).alias('{0}_device_count'.format(s)), \
-			F.mean('device_installment_times').alias('avg_installments_per_{0}_device'.format(s)), \
-			F.mean('device_installed_app_count').alias('avg_installed_app_per_{0}_device'.format(s))).collect()
-		print('=========>', devices_stats)
-		result['{0}_device_count'.format(s)] = devices_stats[0]['{0}_device_count'.format(s)]
-		result['avg_installments_per_{0}_device'.format(s)] = devices_stats[0]['avg_installments_per_{0}_device'.format(s)]
-		result['avg_installed_app_per_{0}_device'.format(s)] = devices_stats[0]['avg_installed_app_per_{0}_device'.format(s)]
-
-	apps = records.repartition(500, ['app_package']).groupBy(['app_package', 'status']).agg(\
-		F.count(F.lit(1)).alias('app_installment_times'), \
-		F.approx_count_distinct('imei', rsd=0.05).alias('app_installed_device_count')).cache()
-	records.unpersist()
-	apps.repartition(100).write.csv('/user/hive/warehouse/ronghui.db/rlab_stats_report/installment/app_rank/{0}'.format(args.query_month), header=True)
-	for s in status:
-		apps_stats = apps.where(apps.status == s).select(\
-			F.count(F.lit(1)).alias('{0}_app_count'.format(s)), \
-			F.mean('app_installment_times').alias('avg_installments_per_{0}_app'.format(s)), \
-			F.mean('app_installed_device_count').alias('avg_installed_device_per_{0}_app'.format(s))).collect()
-		print('=========>', apps_stats)
-		result['{0}_app_count'.format(s)] = apps_stats[0]['{0}_app_count'.format(s)]
-		result['avg_installments_per_{0}_app'.format(s)] = apps_stats[0]['avg_installments_per_{0}_app'.format(s)]
-		result['avg_installed_device_per_{0}_app'.format(s)] = apps_stats[0]['avg_installed_device_per_{0}_app'.format(s)]
-
-	result = sc.parallelize([result]).map(transform_to_row).toDF()
-	result.repartition(1).write.csv('/user/hive/warehouse/ronghui.db/rlab_stats_report/installment/{0}'.format(args.query_month), header=True)
-	'''
+	apps = records.drop('imei').repartition(1000, 'app_package').rdd.map(lambda row: ('{0}sweeroty{1}'.format(row['app_package'].encode('utf-8'), row['status']), 1)).reduceByKey(lambda x, y: x+y).map(transform_to_row).toDF()
+	apps.repartition(10).write.csv('/user/hive/warehouse/ronghui.db/rlab_stats_report/installment/app/{0}'.format(args.query_month), header=True)
