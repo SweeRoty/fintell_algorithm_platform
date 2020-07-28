@@ -1,0 +1,44 @@
+use graph social
+#drop query create_homo_edges
+drop JOB add_imei_edge
+
+CREATE SCHEMA_CHANGE JOB add_imei_edge FOR GRAPH social {
+    ADD UNDIRECTED EDGE imei_edge (FROM IMEI, TO IMEI, weight int);
+}
+RUN JOB add_imei_edge
+
+create query create_homo_edges() for graph social {
+	ListAccum<Vertex<IMEI>> @neighbors;
+	SumAccum<INT> @@imei_edge_count;
+	SumAccum<INT> @@imei_edge_count_2;
+
+	WIFI = {WIFI_GRID.*};
+	start = select s
+			from WIFI:s -(connect_with:e)- IMEI:t
+			accum s.@neighbors += t
+			post-accum
+				int n = s.@neighbors.size(),
+				@@imei_edge_count += n*(n-1)/2;
+
+	print @@imei_edge_count;
+
+	start = select s
+			from WIFI:s
+			post-accum
+				FOREACH i IN range[0, s.@neighbors.size()-2].step(1) DO
+					FOREACH j IN range[i+1, s.@neighbors.size()-1].step(1) DO
+						@@imei_edge_count_2 += 1,
+						INSERT INTO imei_edge (FROM, TO, weight) VALUES (s.@neighbors.get(i) IMEI, s.@neighbors.get(j) IMEI, 1)
+					END
+				END;
+
+	print @@imei_edge_count_2;
+	#DEVICE = {IMEI.*};
+	#tmp = select s
+	#	from DEVICE:s -(imei_edge:e)- IMEI:t;
+	#print tmp.size();
+}
+
+set query_timeout=180000
+INSTALL QUERY create_homo_edges
+run query create_homo_edges()
