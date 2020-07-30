@@ -1,0 +1,39 @@
+use graph social
+drop query pageRank
+
+/*
+Compute the pageRank score for each vertex in the GRAPH
+In each iteration, compute a score for each vertex:
+    score = (1-damping) + damping*sum(received scores FROM its neighbors).
+The pageRank algorithm stops when either of the following is true:
+    a) it reaches maxIter iterations
+    b) the max score change for any vertex compared to the last iteration <= max_change
+*/
+
+CREATE DISTRIBUTED QUERY pageRank (FLOAT max_change, INT max_iter, FLOAT damping, STRING v_type, STRING e_type, STRING file_location) FOR GRAPH social{
+
+    MaxAccum<float> @@max_diff = 9999; // max score change in an iteration
+    SumAccum<float> @received_score = 0; // sum of scores each vertex receives FROM neighbors
+    SumAccum<float> @score = 1;   // initial score for every vertex is 1
+    FILE f (file_location);
+
+    Start = {v_type.*};
+    WHILE @@max_diff > max_change LIMIT max_iter DO
+        @@max_diff = 0;
+        V = SELECT s
+            FROM Start:s -(e_type:e)-> :t
+            ACCUM t.@received_score += s.@score/(s.outdegree(e_type)) 
+            POST-ACCUM
+                s.@score = (1.0-damping)+damping*s.@received_score,
+                s.@received_score = 0,
+                @@max_diff += abs(s.@score-s.@score');
+    END;
+
+    f.println("Vertex_ID", "PageRank");
+    V = SELECT s FROM start:s
+        POST-ACCUM f.println(s, s.@score);
+}
+
+set query_timeout=180000
+INSTALL QUERY pageRank
+run query pageRank()
