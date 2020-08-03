@@ -45,7 +45,9 @@ CREATE QUERY dijkstra (VERTEX source, BOOL display) FOR GRAPH social {
                             t.@minPath += pathTuple(s.@minPath.top().dist + e.weight, s)
 			    END
 		      POST-ACCUM
-			    @@minNode += t.@minPath.top();
+                            IF t.@minPath.size()>0 AND t.@minPath.top().dist < GSQL_INT_MAX THEN
+                            @@minNode += t.@minPath.top()
+                            END;
 
 		total = SELECT s
 			FROM total:s
