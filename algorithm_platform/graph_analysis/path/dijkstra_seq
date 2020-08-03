@@ -1,0 +1,50 @@
+use graph sp_test
+drop query dijkstra_seq
+
+/*
+Standard Dijkstra algorithm for single-Source Shortest Path on directed/undirected graph with positive weight
+*/
+
+CREATE DISTRIBUTED QUERY dijkstra_seq (VERTEX source, STRING e_type) FOR GRAPH sp_test {
+
+    TYPEDEF TUPLE<FLOAT dist, VERTEX v> dist_tuple;
+    HeapAccum<dist_tuple>(1, dist ASC) @@min_unvisited;
+    MinAccum<FLOAT> @dist;
+    OrAccum @visited;
+    FLOAT curr_dist; #VERTEX curr;
+
+    Start = {source};
+    Start = select s
+            from Start:s
+            post-accum
+                s.@dist = 0,
+                @@min_unvisited += dist_tuple(s.@dist, s);
+
+    while Start.size() > 0 do
+        curr_dist = @@min_unvisited.pop().dist;
+        tmp = select t
+                from Start:s -(e_type:e)- :t
+                where abs(s.@dist-curr_dist)<0.000001 and not t.@visited
+                accum t.@dist += s.@dist+e.weight
+                post-accum
+                    s.@visited = True
+                having not t.@visited;
+        Start = select s
+                from Start:s
+                having not s.@visited;
+        Start = Start union tmp;
+        Start = select s
+                from Start:s
+                accum @@min_unvisited += dist_tuple(s.@dist, s);
+        print Start;
+    end;
+
+    Start = {Node.*};
+    #Start = select s
+    #        from E:s;
+    print Start;
+}
+
+set query_timeout=180000
+INSTALL QUERY dijkstra_seq
+run query dijkstra_seq((0, "Node"), "Dist")
