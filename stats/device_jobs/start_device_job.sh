@@ -1,6 +1,5 @@
 #!/bin/bash
 
-nohup spark-submit prepare_app_category.py &
 query_months=(202001 202002 202003 202004 202005 202006)
 for i in ${!query_months[@]}; 
 do
