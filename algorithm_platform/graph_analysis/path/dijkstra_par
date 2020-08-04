@@ -1,0 +1,65 @@
+use graph sp_test
+drop query dijkstra_par
+
+/*
+Standard Dijkstra algorithm for single-Source Shortest Path on directed/undirected graph with positive weight
+*/
+
+CREATE DISTRIBUTED QUERY dijkstra_par (STRING e_type) FOR GRAPH sp_test {
+
+    #SumAccum<INT> @@farness;
+
+    #TYPEDEF TUPLE<FLOAT dist, INT v_index> record;
+    MapAccum<INT, MinAccum<FLOAT>> @@status_map;
+    MapAccum<INT, MinAccum<FLOAT>> @distMap;
+    SetAccum<INT> @visited;
+    SetAccum<INT> @through;
+
+    V = {Node.*};
+
+    Start = select s
+            from V:s
+            post-accum
+                int index = getvid(s),
+                s.@distMap += (index -> 0),
+                s.@through += index;
+
+    while Start.size() > 0 limit 10 do
+        Start = select t
+                from Start:s -(e_type:e)- :t
+                where s.@through.size() > 0
+                accum
+                    foreach source in s.@through do
+                        if not t.@visited.contains(source) then
+                            t.@distMap += (source -> (s.@distMap.get(source)+e.weight))
+                        end,
+                        s.@visited += source
+                    end
+                post-accum
+                    s.@through.clear();
+
+        @@status_map.clear();
+
+        Start = select s
+                from Start:s
+                accum
+                    foreach (source, dist) in s.@distMap do
+                        if not s.@visited.contains(source) then
+                            @@status_map += (source -> dist)
+                        end
+                    end
+                post-accum
+                    foreach (source, dist) in @@status_map do
+                        if s.@distMap.containsKey(source) and abs(s.@distMap.get(source)-dist) < 0.001 then
+                            s.@through += source
+                        end
+                    end
+                having s.@through.size() > 0;
+    end;
+
+    print V;
+}
+
+set query_timeout=120000
+INSTALL QUERY dijkstra_par
+run query dijkstra_par("Dist")
