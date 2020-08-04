@@ -2,7 +2,7 @@ use graph sp_test
 drop query dijkstra_par
 
 /*
-Standard Dijkstra algorithm for single-Source Shortest Path on directed/undirected graph with positive weight
+Standard Dijkstra algorithm for all-Source Shortest Path on directed/undirected graph with positive weight
 */
 
 CREATE DISTRIBUTED QUERY dijkstra_par (STRING e_type) FOR GRAPH sp_test {
