@@ -1,0 +1,23 @@
+USE GRAPH social
+CREATE QUERY floyd (BOOL display) FOR GRAPH social {
+
+	MapAccum<VERTEX,MinAccum<FLOAT>> @pathMap;
+	start = {Person.*};
+	tmp = SELECT s 
+	      FROM start:s -((Friend):e)-> :t
+	      ACCUM s.@pathMap += (s -> 0);
+
+	tmp = SELECT s
+		FROM start:s -((Friend):e)-> :t
+		ACCUM s.@pathMap += (t -> e.weight);
+		
+	tmp = SELECT s
+		FROM start:s -((Friend):e)-> :t
+		ACCUM 
+			FOREACH (key,val) in t.@pathMap DO
+				s.@pathMap += (key -> (e.weight+val))
+			END;
+	IF display THEN
+		PRINT start[start.@pathMap];
+	END;
+}		
