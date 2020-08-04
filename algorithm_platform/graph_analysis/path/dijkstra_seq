@@ -7,27 +7,27 @@ Standard Dijkstra algorithm for single-Source Shortest Path on directed/undirect
 
 CREATE DISTRIBUTED QUERY dijkstra_seq (VERTEX source, STRING e_type) FOR GRAPH sp_test {
 
-    TYPEDEF TUPLE<FLOAT dist, VERTEX v> dist_tuple;
-    HeapAccum<dist_tuple>(1, dist ASC) @@min_unvisited;
-    MinAccum<FLOAT> @dist;
+    MinAccum<FLOAT> @@min_dist;
+    MinAccum<FLOAT> @dist = GSQL_INT_MAX;
     OrAccum @visited;
-    FLOAT curr_dist; #VERTEX curr;
+    FLOAT curr_min_dist;
+    SumAccum<INT> @@farness;
 
     Start = {source};
     Start = select s
             from Start:s
-            post-accum
-                s.@dist = 0,
-                @@min_unvisited += dist_tuple(s.@dist, s);
+            post-accum s.@dist = 0;
 
     while Start.size() > 0 do
-        curr_dist = @@min_unvisited.pop().dist;
+        curr_min_dist = @@min_dist;
+        @@min_dist = GSQL_INT_MAX;
         tmp = select t
                 from Start:s -(e_type:e)- :t
-                where abs(s.@dist-curr_dist)<0.000001 and not t.@visited
+                where abs(s.@dist-curr_min_dist) < 0.000001 and not t.@visited
                 accum t.@dist += s.@dist+e.weight
                 post-accum
-                    s.@visited = True
+                    s.@visited = True,
+                    @@farness += s.@dist
                 having not t.@visited;
         Start = select s
                 from Start:s
@@ -35,16 +35,16 @@ CREATE DISTRIBUTED QUERY dijkstra_seq (VERTEX source, STRING e_type) FOR GRAPH s
         Start = Start union tmp;
         Start = select s
                 from Start:s
-                accum @@min_unvisited += dist_tuple(s.@dist, s);
-        print Start;
+                accum @@min_dist += s.@dist;
     end;
 
     Start = {Node.*};
-    #Start = select s
-    #        from E:s;
     print Start;
+    print @@farness;
+    #Start = select s
+    #        from Start:s;
 }
 
-set query_timeout=180000
+set query_timeout=120000
 INSTALL QUERY dijkstra_seq
 run query dijkstra_seq((0, "Node"), "Dist")
