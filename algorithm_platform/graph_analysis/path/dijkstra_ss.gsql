@@ -1,50 +1,50 @@
-use graph sp_test
+use graph sp_test2
 drop query dijkstra_seq
 
 /*
 Standard Dijkstra algorithm for single-Source Shortest Path on directed/undirected graph with positive weight
 */
 
-CREATE DISTRIBUTED QUERY dijkstra_seq (VERTEX source, STRING e_type) FOR GRAPH sp_test {
+CREATE DISTRIBUTED QUERY dijkstra_seq (VERTEX source, STRING e_type, INT max_iter) FOR GRAPH sp_test2 {
 
-    MinAccum<FLOAT> @@min_dist;
-    MinAccum<FLOAT> @dist = GSQL_INT_MAX;
+    TYPEDEF TUPLE<FLOAT dist, STRING path> distPath;
+    HeapAccum<distPath>(1, dist ASC) @dist_path;
     OrAccum @visited;
     FLOAT curr_min_dist;
+    MinAccum<FLOAT> @@min_dist;
     SumAccum<INT> @@farness;
 
-    Start = {source};
-    Start = select s
-            from Start:s
-            post-accum s.@dist = 0;
+    S = {source};
+    S = select s
+        from S:s
+        post-accum s.@dist_path += distPath(0, s.alias);
 
-    while Start.size() > 0 do
+    while S.size() > 0 limit max_iter do
         curr_min_dist = @@min_dist;
         @@min_dist = GSQL_INT_MAX;
-        tmp = select t
-                from Start:s -(e_type:e)- :t
-                where abs(s.@dist-curr_min_dist) < 0.000001 and not t.@visited
-                accum t.@dist += s.@dist+e.weight
-                post-accum
-                    s.@visited = True,
-                    @@farness += s.@dist
-                having not t.@visited;
-        Start = select s
-                from Start:s
-                having not s.@visited;
-        Start = Start union tmp;
-        Start = select s
-                from Start:s
-                accum @@min_dist += s.@dist;
+        T = select t
+            from S:s -(e_type:e)- :t
+            where abs(s.@dist_path.top().dist-curr_min_dist) < 0.001# and not t.@visited
+            accum
+                if not t.@visited then
+                    t.@dist_path += distPath(s.@dist_path.top().dist+e.weight, s.@dist_path.top().path+","+t.alias)
+                end
+            post-accum
+                s.@visited = True,
+                @@farness += s.@dist_path.top().dist
+            having not t.@visited;
+        S = select s
+            from S:s
+            having not s.@visited;
+        S = S union T;
+        S = select s
+            from S:s
+            accum @@min_dist += s.@dist_path.top().dist;
     end;
 
-    Start = {Node.*};
-    print Start;
     print @@farness;
-    #Start = select s
-    #        from Start:s;
 }
 
 set query_timeout=120000
 INSTALL QUERY dijkstra_seq
-run query dijkstra_seq((0, "Node"), "Dist")
+run query dijkstra_seq((0, "Node2"), "Dist2", 15)
