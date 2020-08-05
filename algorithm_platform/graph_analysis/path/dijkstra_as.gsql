@@ -5,17 +5,14 @@ drop query dijkstra_par
 Standard Dijkstra algorithm for all-Source Shortest Path on directed/undirected graph with positive weight
 */
 
-CREATE DISTRIBUTED QUERY dijkstra_par (STRING e_type) FOR GRAPH sp_test {
+CREATE DISTRIBUTED QUERY dijkstra_par (STRING v_type, STRING e_type, INT max_iter) FOR GRAPH sp_test {
 
-    #SumAccum<INT> @@farness;
-
-    #TYPEDEF TUPLE<FLOAT dist, INT v_index> record;
     MapAccum<INT, MinAccum<FLOAT>> @@status_map;
     MapAccum<INT, MinAccum<FLOAT>> @distMap;
     SetAccum<INT> @visited;
     SetAccum<INT> @through;
 
-    V = {Node.*};
+    V = {v_type.*};
 
     Start = select s
             from V:s
@@ -24,7 +21,7 @@ CREATE DISTRIBUTED QUERY dijkstra_par (STRING e_type) FOR GRAPH sp_test {
                 s.@distMap += (index -> 0),
                 s.@through += index;
 
-    while Start.size() > 0 limit 10 do
+    while Start.size() > 0 limit max_iter do
         Start = select t
                 from Start:s -(e_type:e)- :t
                 where s.@through.size() > 0
@@ -62,4 +59,4 @@ CREATE DISTRIBUTED QUERY dijkstra_par (STRING e_type) FOR GRAPH sp_test {
 
 set query_timeout=120000
 INSTALL QUERY dijkstra_par
-run query dijkstra_par("Dist")
+run query dijkstra_par("Node", "Dist", 10)
