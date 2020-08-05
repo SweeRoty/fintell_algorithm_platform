@@ -1,11 +1,11 @@
 use graph sp_test2
-drop query dijkstra_seq
+drop query dijkstra_ss
 
 /*
 Standard Dijkstra algorithm for single-Source Shortest Path on directed/undirected graph with positive weight
 */
 
-CREATE DISTRIBUTED QUERY dijkstra_seq (VERTEX source, STRING e_type, INT max_iter) FOR GRAPH sp_test2 {
+CREATE DISTRIBUTED QUERY dijkstra_ss (VERTEX source, STRING e_type, INT max_iter) FOR GRAPH sp_test2 {
 
     TYPEDEF TUPLE<FLOAT dist, STRING path> distPath;
     HeapAccum<distPath>(1, dist ASC) @dist_path;
@@ -46,5 +46,5 @@ CREATE DISTRIBUTED QUERY dijkstra_seq (VERTEX source, STRING e_type, INT max_ite
 }
 
 set query_timeout=120000
-INSTALL QUERY dijkstra_seq
-run query dijkstra_seq((0, "Node2"), "Dist2", 15)
+INSTALL QUERY dijkstra_ss
+run query dijkstra_ss((0, "Node2"), "Dist2", 15)
