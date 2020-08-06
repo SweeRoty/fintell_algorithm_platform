@@ -1,0 +1,45 @@
+use graph sp_test
+drop query clustering_coef
+
+/*
+Compute local clustering coeficient for each vertex on undirected graph
+*/
+
+CREATE QUERY clustering_coef (STRING v_type, STRING e_type, STRING file_location) FOR GRAPH sp_test {
+
+    SetAccum<INT> @neighbors;
+    SumAccum<FLOAT> @localCoef;
+    FILE f (file_location);
+
+    S = {v_type.*};
+
+    S = select s
+        from S:s -(e_type:e) - :t
+        accum
+            s.@neighbors += str_to_int(t.alias);
+
+    S = select s
+        from S:s -(e_type:e) - :t
+        accum
+            foreach neighbor in t.@neighbors do
+                if s.@neighbors.contains(neighbor) then
+                    s.@localCoef += 1
+                end
+            end
+        post-accum
+            int k = s.@neighbors.size(),
+            if k > 1 then
+                s.@localCoef = s.@localCoef/k/(k-1)
+            else
+                s.@localCoef = 0
+            end;
+
+    f.println("Vertex_ID", "Local_Coef");
+    S = select s
+        from S:s
+        post-accum f.println(s, s.@localCoef);
+}
+
+set query_timeout=120000
+INSTALL QUERY clustering_coef
+run query clustering_coef("Node", "Dist", "/home/ronghui_safe/hangeyang/local_coef_test.csv")
