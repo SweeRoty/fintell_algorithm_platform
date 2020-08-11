@@ -57,17 +57,17 @@ CREATE DISTRIBUTED QUERY closeness_dist (STRING v_type, STRING e_type, int max_i
     end;
 
     f.println("Vertex_ID", "farness");
-    V = select s
+    W = select s
         from V:s
         post-accum
             float farness = 0.0, 
             foreach (source, dist) in s.@distMap do
                 farness = farness + dist
             end,
-            f.println(s, farness);
+            f.println(s, (V.size()-1)/farness);
 
 }
 
 set query_timeout=1200000
 INSTALL QUERY closeness_dist
-run query closeness_dist("Node", "Dist", 10, "/home/ronghui_safe/hangeyang/sp_test/closeness_dist.csv")
+run query closeness_dist("Account", "Connected", 10, "/home/ronghui_safe/hangeyang/output/closeness_dist.csv")
