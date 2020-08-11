@@ -1,46 +1,56 @@
-use graph social_test
+use graph fb_test
 drop query conn_comp
 
-CREATE QUERY conn_comp () FOR GRAPH social_test {
-    # This query identifies the Connected Components (undirected edges)
+/*
+Compute the distribution of (weak) connected components and output the results to a local CSV file
+*/
+
+CREATE DISTRIBUTED QUERY conn_comp (STRING v_type, STRING e_type, STRING file_location) FOR GRAPH fb_test {
 
     MinAccum<int> @cc_id = 0; //each vertex's tentative component id
     MinAccum<int> @prev_id = 0;
     OrAccum<bool> @active; //false
     MapAccum<int, int> @@compSizes;
+    FILE f (file_location);
 
-    Start = {Person.*};
+    S = {v_type.*};
 
     # Initialize: Label each vertex with its own internal ID
-    S = SELECT x
-        FROM Start:x
-        POST-ACCUM x.@cc_id = getvid(x), x.@prev_id = getvid(x);
+    S = select x
+        from S:x
+        post-accum
+            x.@cc_id = getvid(x),
+            x.@prev_id = getvid(x);
 
     # Propagate smaller internal IDs until no more ID changes can be DOne
-    WHILE (Start.size()>0) DO
-        Start = SELECT t
-                FROM Start:s -(Coworker:e)-> :t
-                ACCUM t.@cc_id += s.@cc_id // If s has a smaller id than t, copy the id to t
-                POST-ACCUM
-                    CASE
-                    WHEN t.@prev_id != t.@cc_id THEN // If t's id has changed
-                        t.@prev_id += t.@cc_id,
-                        t.@active = true
-                    ELSE
-                        t.@active = false
-                    END
-                HAVING t.@active == true;
-    END;
+    while (S.size()>0) do
+        S = select t
+            from S:s -(e_type:e)-> :t
+            accum t.@cc_id += s.@cc_id // If s has a smaller id than t, copy the id to t
+            post-accum
+                case
+                when t.@prev_id != t.@cc_id then // If t's id has changed
+                    t.@prev_id += t.@cc_id,
+                    t.@active = true
+                else
+                    t.@active = false
+                end
+            having t.@active == true;
+    end;
 
-    Start = {Person.*};
+    S = {v_type.*};
 
-    Start = SELECT s
-            FROM Start:s
-            POST-ACCUM @@compSizes += (s.@cc_id -> 1);
+    S = select s
+        from S:s
+        post-accum @@compSizes += (s.@cc_id -> 1);
 
-    PRINT @@compSizes;
+    f.println("Comp_ID", "Size");
+    foreach (comp_id, size) in @@compSizes do
+        f.println(comp_id, size);
+    end;
+
 }
 
-set query_timeout=180000
+set query_timeout=120000
 INSTALL QUERY conn_comp
-run query conn_comp()
+run query conn_comp("Account", "Connected", "/home/ronghui_safe/hangeyang/output/conn_comp_dist.csv")
