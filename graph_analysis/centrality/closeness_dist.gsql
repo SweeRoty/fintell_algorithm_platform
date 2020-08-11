@@ -56,7 +56,7 @@ CREATE DISTRIBUTED QUERY closeness_dist (STRING v_type, STRING e_type, int max_i
     
     end;
 
-    f.println("Vertex_ID", "farness");
+    f.println("Vertex_ID", "closeness");
     W = select s
         from V:s
         post-accum
