@@ -1,4 +1,4 @@
-use graph social
+use graph fb_test
 drop query pageRank
 
 /*
@@ -10,7 +10,7 @@ The pageRank algorithm stops when either of the following is true:
     b) the max score change for any vertex compared to the last iteration <= max_change
 */
 
-CREATE DISTRIBUTED QUERY pageRank (FLOAT max_change, INT max_iter, FLOAT damping, STRING v_type, STRING e_type, STRING file_location) FOR GRAPH social{
+CREATE DISTRIBUTED QUERY pageRank (FLOAT max_change, INT max_iter, FLOAT damping, STRING v_type, STRING e_type, STRING file_location) FOR GRAPH fb_test{
 
     MaxAccum<float> @@max_diff = 9999; // max score change in an iteration
     SumAccum<float> @received_score = 0; // sum of scores each vertex receives FROM neighbors
@@ -30,10 +30,11 @@ CREATE DISTRIBUTED QUERY pageRank (FLOAT max_change, INT max_iter, FLOAT damping
     END;
 
     f.println("Vertex_ID", "PageRank");
-    V = SELECT s FROM start:s
+    V = SELECT s
+        FROM Start:s
         POST-ACCUM f.println(s, s.@score);
 }
 
-set query_timeout=180000
+set query_timeout=120000
 INSTALL QUERY pageRank
-run query pageRank()
+run query pageRank(0.001, 10, 0.85, "Account", "Connected", "/home/ronghui_safe/hangeyang/output/page_rank_dist.csv")
