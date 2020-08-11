@@ -23,4 +23,4 @@ CREATE DISTRIBUTED QUERY degree_dist (STRING v_type, STRING e_type, STRING file_
 
 set query_timeout=120000
 INSTALL QUERY degree_dist
-run query degree_dist("IMEI", "connect_with", "/home/ronghui_safe/hangeyang/degree_test.csv")
+run query degree_dist("IMEI", "connect_with", "/home/ronghui_safe/hangeyang/output/degree_test.csv")
