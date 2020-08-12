@@ -1,0 +1,80 @@
+use graph sp_test
+drop query dijkstra_path
+
+/*
+*/
+
+CREATE DISTRIBUTED QUERY dijkstra_path (VERTEX source, STRING e_type, INT max_iter) FOR GRAPH sp_test {
+
+    TYPEDEF TUPLE<FLOAT dist, STRING pred> distPath;
+    HeapAccum<distPath>(1, dist ASC) @dist_path;
+    OrAccum @visited;
+    ListAccum<STRING> @path;
+    FLOAT curr_min_dist;
+    MinAccum<FLOAT> @@min_dist;
+    MapAccum<STRING, INT> @@local_map;
+
+    S = {source};
+    S = select s
+        from S:s
+        post-accum
+            s.@dist_path += distPath(0, ""),
+            s.@path += s.alias;
+
+    while S.size() > 0 limit max_iter do
+        curr_min_dist = @@min_dist;
+        @@min_dist = GSQL_INT_MAX;
+        T = select t
+            from S:s -(e_type:e)- :t
+            where abs(s.@dist_path.top().dist-curr_min_dist) < 0.001# and not t.@visited
+            accum
+                if not t.@visited then
+                    t.@dist_path += distPath(s.@dist_path.top().dist+e.weight, s.alias)
+                end
+            post-accum
+                s.@visited = True
+            having not t.@visited;
+        S = select s
+            from S:s
+            having not s.@visited;
+        S = S union T;
+        S = select s
+            from S:s
+            accum @@min_dist += s.@dist_path.top().dist;
+    end;
+
+    S = {source};
+    while S.size() > 0 do
+        S = select t
+            from S:s- (e_type:e) - :t
+            where t.@dist_path.top().pred == s.alias
+            accum
+                t.@path = s.@path,
+                t.@path += t.alias;
+    end;
+
+    S = {source};
+    S = select t
+        from S:s -(e_type:e) - :t
+        where t.@dist_path.top().pred == s.alias
+        accum
+            s.@visited = False,
+            t.@visited = False;
+    while S.size() > 0 do
+        S = select t
+            from S:s- (e_type:e) - :t
+            where t.@visited
+            post-accum
+                t.@visited = False,
+                int n = t.@path.size(),
+                foreach i in range [1, n-2] do
+                    @@local_map += (t.@path.get(i) -> 1)
+                end;
+    end;
+
+    print @@local_map;
+}
+
+set query_timeout=120000
+INSTALL QUERY dijkstra_path
+run query dijkstra_path((0, "Node"), "Dist", 10)
