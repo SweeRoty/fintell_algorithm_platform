@@ -1,12 +1,14 @@
-use graph sp_test
-drop query dijkstra_as
+use graph fb_test
+drop query path_stats
 
 /*
-Standard Dijkstra algorithm for all-Source Shortest Path on directed/undirected graph with positive weight
+Compute network diameter and average shortest path length using standard Dijkstra algorithm for all-source shortest path on directed/undirected graph with positive weight
 */
 
-CREATE DISTRIBUTED QUERY dijkstra_as (STRING v_type, STRING e_type, INT max_iter) FOR GRAPH sp_test {
+CREATE DISTRIBUTED QUERY path_stats (STRING v_type, STRING e_type, INT max_iter) FOR GRAPH fb_test {
 
+    MaxAccum<FLOAT> @@diameter;
+    AvgAccum @@avg_path_length;
     MapAccum<INT, MinAccum<FLOAT>> @@status_map;
     MapAccum<INT, MinAccum<FLOAT>> @distMap;
     SetAccum<INT> @visited;
@@ -54,9 +56,23 @@ CREATE DISTRIBUTED QUERY dijkstra_as (STRING v_type, STRING e_type, INT max_iter
                 having s.@through.size() > 0;
     end;
 
-    print V;
+    V = select s
+        from V:s
+        post-accum
+            foreach (tid, dist) in s.@distMap do
+                int sid = getvid(s),
+                if sid != tid then
+                    @@diameter += dist,
+                    @@avg_path_length += dist
+                end
+            end;
+    
+    #@@avg_path_length = @@avg_path_length/(V.size()*(V.size()-1));
+    
+    print @@diameter;
+    print @@avg_path_length;
 }
 
 set query_timeout=120000
-INSTALL QUERY dijkstra_as
-run query dijkstra_as("Node", "Dist", 10)
+INSTALL QUERY path_stats
+run query path_stats("Account", "Connected", 10)
