@@ -1,69 +1,107 @@
 use graph sp_test
 drop query betweenness_dist
+drop query dijkstra_path
 
 /*
-Standard Dijkstra algorithm for all-Source Shortest Path on directed/undirected graph with positive weight
+Output betweenness distribution based on standard Dijkstra algorithm for single-source shortest path on directed/undirected graph with positive weight
 */
 
-CREATE DISTRIBUTED QUERY betweenness_dist (STRING v_type, STRING e_type) FOR GRAPH sp_test {
+CREATE QUERY dijkstra_path (VERTEX source, STRING e_type, STRING v_index, INT max_iter) FOR GRAPH sp_test RETURNS(MapAccum<STRING, INT>){
 
-    MapAccum<INT, MinAccum<FLOAT>> @@curr_dist;
-    MapAccum<INT, MinAccum<FLOAT>> @distMap;
-    #MapAccum<INT, ListAccum<INT>> @pathMap;
-    MapAccum<INT, MapAccum<FLOAT, INT>> @pathMap;
-    SetAccum<INT> @visited;
-    SetAccum<INT> @through;
+    TYPEDEF TUPLE<FLOAT dist, STRING pred> distPath;
+    HeapAccum<distPath>(1, dist ASC) @dist_path;
+    OrAccum @visited;
+    ListAccum<STRING> @path;
+    FLOAT curr_min_dist;
+    MinAccum<FLOAT> @@min_dist;
+    MapAccum<STRING, INT> @@local_map;
+    FILE f ("/home/ronghui_safe/hangeyang/output/betweenness/bt"+v_index);
 
-    V = {v_type.*};
+    S = {source};
+    S = select s
+        from S:s
+        post-accum
+            s.@dist_path += distPath(0, ""),
+            s.@path += s.alias;
 
-    Start = select s
-            from V:s
+    while S.size() > 0 limit max_iter do
+        curr_min_dist = @@min_dist;
+        @@min_dist = GSQL_INT_MAX;
+        T = select t
+            from S:s -(e_type:e)- :t
+            where abs(s.@dist_path.top().dist-curr_min_dist) < 0.001# and not t.@visited
+            accum
+                if not t.@visited then
+                    t.@dist_path += distPath(s.@dist_path.top().dist+e.weight, s.alias)
+                end
             post-accum
-                int index = getvid(s),
-                s.@distMap += (index -> 0),
-                s.@pathMap += (index -> (0 -> index)),
-                s.@through += index;
-
-    while Start.size() > 0 limit 10 do
-        Start = select t
-                from Start:s -(e_type:e)- :t
-                where s.@through.size() > 0 ### to be deleted
-                accum
-                    foreach source in s.@through do
-                        if not t.@visited.contains(source) then
-                            float dist = s.@distMap.get(source)+e.weight,
-                            t.@distMap += (source -> dist),
-                            t.@pathMap += (source -> (dist -> s.@pathMap.get(source).get(s.@distMap.get(source)))) ### unsuported
-                        end,
-                        s.@visited += source
-                    end
-                post-accum
-                    s.@through.clear();
-
-        @@curr_dist.clear();
-
-        Start = select s
-                from Start:s
-                accum
-                    foreach (source, dist) in s.@distMap do
-                        if not s.@visited.contains(source) then
-                            @@curr_dist += (source -> dist)
-                        end
-                    end
-                post-accum
-                    foreach (source, dist) in @@curr_dist do
-                        if s.@distMap.containsKey(source) and abs(s.@distMap.get(source)-dist) < 0.001 then
-                            s.@through += source,
-                            int predecessor = s.@distToPre.get(source).get(dist),
-                            s.@pathMap += (source -> )
-                        end
-                    end
-                having s.@through.size() > 0;
+                s.@visited = True
+            having not t.@visited;
+        S = select s
+            from S:s
+            having not s.@visited;
+        S = S union T;
+        S = select s
+            from S:s
+            accum @@min_dist += s.@dist_path.top().dist;
     end;
 
-    print V;
+    S = {source};
+    while S.size() > 0 do
+        S = select t
+            from S:s- (e_type:e) - :t
+            where t.@dist_path.top().pred == s.alias
+            accum
+                t.@path = s.@path,
+                t.@path += t.alias;
+    end;
+
+    S = {source};
+    S = select t
+        from S:s -(e_type:e) - :t
+        where t.@dist_path.top().pred == s.alias
+        accum
+            s.@visited = False,
+            t.@visited = False;
+    while S.size() > 0 do
+        S = select t
+            from S:s- (e_type:e) - :t
+            where t.@visited
+            post-accum
+                t.@visited = False,
+                int n = t.@path.size(),
+                foreach i in range [1, n-2] do
+                    @@local_map += (t.@path.get(i) -> 1)
+                end;
+    end;
+
+    f.println("Vertex_ID", "betweenness_count");
+    foreach (vid, btc) in @@local_map do
+        f.println(vid, btc);
+    end;
+    return @@local_map;
 }
 
-set query_timeout=120000
+CREATE DISTRIBUTED QUERY betweenness_dist (STRING v_type, STRING e_type, INT max_iter) FOR GRAPH sp_test {
+
+    MapAccum<STRING, INT> @local_map;
+    MapAccum<STRING, INT> @@betweenness_map;
+
+    Start = {v_type.*};
+
+    Start = select s
+            from Start:s
+            post-accum
+                s.@local_map = dijkstra_path(s, e_type, s.alias, max_iter),
+                foreach (vid, btc) in s.@local_map do
+                    @@betweenness_map += (vid -> btc)
+                end;
+
+    print @@betweenness_map;
+
+}
+
+set query_timeout=600000
+INSTALL QUERY dijkstra_path
 INSTALL QUERY betweenness_dist
-run query betweenness_dist("Node", "Dist")
+run query betweenness_dist("Node", "Dist", 10)
