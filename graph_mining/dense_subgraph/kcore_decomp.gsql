@@ -1,0 +1,66 @@
+use graph kcore_test
+drop query kcore_decomp
+
+/*
+Partition the vertices into communities using the Label Propagation method.
+*/
+
+CREATE DISTRIBUTED QUERY kcore_decomp (STRING v_type, STRING e_type, STRING file_location) FOR GRAPH kcore_test {
+
+    ListAccum<INT> @@ordering;
+    MinAccum<INT> @@i;
+    MinAccum<INT> @@selected_id;
+    OrAccum @removed;
+    SumAccum<INT> @d;
+    SumAccum<INT> @coreness;
+    INT k = 0;
+    FILE f (file_location);
+
+    S = {v_type.*};
+
+    S = select s
+        from S:s -(e_type:e)- :t
+        accum s.@d += 1
+        having s.@d > 0;
+
+    foreach j in range[0, S.size()-1] do
+        @@i = GSQL_INT_MAX;
+        @@selected_id = GSQL_INT_MAX;
+        T = select s
+            from S:s
+            where not s.@removed
+            post-accum @@i += s.@d;
+        T = select s
+            from T:s
+            where s.@d == @@i
+            post-accum @@selected_id += getvid(s);
+        T = select s
+            from T:s
+            having getvid(s) == @@selected_id;
+            #order by getvid(s)
+            #limit 1;
+        if k < @@i then
+            k = @@i;
+        end;
+        T = select s
+            from T:s -(e_type:e)- :t
+            accum
+                t.@d += -1
+            post-accum
+                s.@removed = True,
+                @@ordering += s.alias,
+                s.@coreness = k;
+    end;
+
+    #print @@ordering;
+    print k;
+
+    f.println("Vertex_ID", "Coreness");
+    T = select s
+        from S:s
+        post-accum f.println(s, s.@coreness);
+}
+
+set query_timeout=120000
+INSTALL QUERY kcore_decomp
+run query kcore_decomp("KNode", "KConnected", "/home/ronghui_safe/hangeyang/output/kcore_decomposition.csv")
