@@ -20,6 +20,7 @@ CREATE DISTRIBUTED QUERY louvain_parallel(STRING v_type, STRING e_type, INT iter
     HeapAccum<vDeltaQ>(1, deltaQ DESC, cid ASC) @largestDeltaQ; ## if deltaQ is the same, select the one with mininal vid
     MapAccum<INT, FLOAT> @weightToCluster; ## weight from one vertex incident to that cluster
     SumAccum<FLOAT> @cweight; ## total weight incident to this aggregate vertex
+    FILE f (file_location);
 
     INT iteration;
     FLOAT last_modularity = 0;
@@ -203,8 +204,14 @@ CREATE DISTRIBUTED QUERY louvain_parallel(STRING v_type, STRING e_type, INT iter
             FROM Start:s
             POST-ACCUM @@clusterSizes += (s.@cid_new -> 1);
     print @@clusterSizes;
+    print @@clusterSizes.size();
+
+    f.println("Vertex_ID", "Community");
+    W = select s
+        from Start:s
+        post-accum f.println(s, s.@cid_new);
 }
 
 set query_timeout=300000
 INSTALL QUERY louvain_parallel
-run query louvain_parallel("APP", "SharedDevice", 20, 10)
+run query louvain_parallel("APP", "SharedDevice", 20, 10, "/home/ronghui_safe/hangeyang/output/app/communities_louvain.csv")
