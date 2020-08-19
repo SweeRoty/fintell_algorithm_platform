@@ -1,16 +1,18 @@
-use graph social_test
+use graph app_test
 drop query label_prop
 
-CREATE QUERY label_prop (INT maxIter) FOR GRAPH social_test {
-    # Partition the vertices into communities, according to the Label Propagation method.
-    # Indicate community membership by assigning each vertex a community ID.
+/*
+Partition the vertices into communities using the Label Propagation method.
+*/
+
+CREATE DISTRIBUTED QUERY label_prop (STRING v_type, STRING e_type, INT maxIter, STRING file_location) FOR GRAPH app_test {
 
     OrAccum @@changed = true;
-    MapAccum<int, int> @@commSizes;   //<communityId, members>
     MapAccum<int, int> @map;     //<communityId, numNeighbors>
     MaxAccum<int> @label, @num;
+    FILE f (file_location);
 
-    Start = {Person.*};
+    Start = {v_type.*};
 
     # Assign unique labels to each vertex
     Start = SELECT s
@@ -21,7 +23,7 @@ CREATE QUERY label_prop (INT maxIter) FOR GRAPH social_test {
     WHILE @@changed == true LIMIT maxIter DO
         @@changed = false;
         Start = SELECT s
-                FROM Start:s -(Coworker:e)-> :t
+                FROM Start:s -(e_type:e)- :t
                 ACCUM t.@map += (s.@label -> 1)  //count the occurrences of neighbor's labels
                 POST-ACCUM
                     INT maxV = -1,
@@ -43,16 +45,14 @@ CREATE QUERY label_prop (INT maxIter) FOR GRAPH social_test {
                     t.@map.clear();
     END;
 
-    Start = {Person.*};
+    Start = {v_type.*};
 
-    Start = SELECT s
-            FROM Start:s
-            POST-ACCUM @@commSizes += (s.@label -> 1);
-
-    PRINT @@commSizes;
-    PRINT Start.@label;
+    f.println("Vertex_ID", "Community");
+    W = select s
+        from Start:s
+        post-accum f.println(s, s.@label);
 }
 
-set query_timeout=180000
+set query_timeout=120000
 INSTALL QUERY label_prop
-run query label_prop(8)
+run query label_prop("APP", "SharedDevice", 50, "/home/ronghui_safe/hangeyang/output/app/communities_lpa.csv")
