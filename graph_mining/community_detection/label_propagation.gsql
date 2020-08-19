@@ -8,6 +8,7 @@ Partition the vertices into communities using the Label Propagation method.
 CREATE DISTRIBUTED QUERY label_prop (STRING v_type, STRING e_type, INT maxIter, STRING file_location) FOR GRAPH app_test {
 
     OrAccum @@changed = true;
+    MapAccum<int, int> @@commSizes;
     MapAccum<int, int> @map;     //<communityId, numNeighbors>
     MaxAccum<int> @label, @num;
     FILE f (file_location);
@@ -46,6 +47,10 @@ CREATE DISTRIBUTED QUERY label_prop (STRING v_type, STRING e_type, INT maxIter, 
     END;
 
     Start = {v_type.*};
+    Start = SELECT s
+            FROM Start:s
+            POST-ACCUM @@commSizes += (s.@label -> 1);
+    print @@commSizes.size();
 
     f.println("Vertex_ID", "Community");
     W = select s
