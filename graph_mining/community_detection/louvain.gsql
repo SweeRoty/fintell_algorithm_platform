@@ -1,7 +1,7 @@
-use graph social_test
+use graph app_test
 drop query louvain_parallel
 
-CREATE QUERY louvain_parallel(INT iter1 = 10, INT iter2 = 10) FOR GRAPH social_test {
+CREATE DISTRIBUTED QUERY louvain_parallel(STRING v_type, STRING e_type, INT iter1, INT iter2) FOR GRAPH app_test {
     TYPEDEF TUPLE <INT csize, INT number> ClusterNum;
     TYPEDEF TUPLE <VERTEX node, INT cid, FLOAT deltaQ> vDeltaQ;
 
@@ -12,7 +12,7 @@ CREATE QUERY louvain_parallel(INT iter1 = 10, INT iter2 = 10) FOR GRAPH social_t
     SetAccum<VERTEX> @@representSet;
     MapAccum<INT, MapAccum<INT, FLOAT>> @@weightToClusterMap; ## calculate edges between communities
     MapAccum<INT, MinAccum<INT>> @@moveComm; ## map of communities that changed its community id
-    #MapAccum<INT, INT> @@clusterSizes; ## size of a cluster
+    MapAccum<INT, INT> @@clusterSizes; ## size of a cluster
 
     SumAccum<FLOAT> @weight; ## total weight incident to this vertex
     SumAccum<INT> @cid, @cid_new; ## which cluster it belongs to
@@ -23,15 +23,15 @@ CREATE QUERY louvain_parallel(INT iter1 = 10, INT iter2 = 10) FOR GRAPH social_t
 
     INT iteration;
     FLOAT last_modularity = 0;
-    FLOAT epsilon = 0.0001;
+    FLOAT epsilon = 0.001;
     INT Iter1;
     INT iteration2;
     FLOAT last_modularity2 = 0;
 
     # Initialize: count edges and set a unique cluster ID for each vertex
-    Start = {Person.*};
+    Start = {v_type.*};
     S = SELECT s
-        FROM Start:s -(Coworker:e)- :t
+        FROM Start:s -(e_type:e)- :t
         ACCUM
             @@totalWeight += e.weight,
             s.@weight += e.weight
@@ -43,7 +43,7 @@ CREATE QUERY louvain_parallel(INT iter1 = 10, INT iter2 = 10) FOR GRAPH social_t
     # Special first iteration of Phase 1
     iteration = 1;
     S = SELECT s
-        FROM Start:s -(:e)- :t
+        FROM Start:s -(e_type:e)- :t
         WHERE s.@cid > t.@cid
         ACCUM
             # weightToCluster is just e.weight
@@ -56,7 +56,7 @@ CREATE QUERY louvain_parallel(INT iter1 = 10, INT iter2 = 10) FOR GRAPH social_t
             s.@largestDeltaQ.clear();
 
     S = SELECT s
-        FROM Start:s-(:e)-:t
+        FROM Start:s-(e_type:e)-:t
         WHERE s.@cid == t.@cid
         ACCUM
             @@modularity += e.weight/(2*@@totalWeight)-s.@weight*t.@weight/(4*@@totalWeight*@@totalWeight);
@@ -66,7 +66,6 @@ CREATE QUERY louvain_parallel(INT iter1 = 10, INT iter2 = 10) FOR GRAPH social_t
     S = SELECT s
         FROM Start:s
         ACCUM @@totIncidentCluster += (s.@cid -> s.@weight);
-    print S;
 
     # Phase 1
     iteration = 1;
@@ -76,7 +75,7 @@ CREATE QUERY louvain_parallel(INT iter1 = 10, INT iter2 = 10) FOR GRAPH social_t
         iteration = iteration + 1;
 
         S = SELECT s
-            FROM Start:s -(:e)- :t
+            FROM Start:s -(e_type:e)- :t
             # At least one cluster not singlet(a cluster on its own). If both clusters are singlets, consider only when the label of target is smaller to avoid swap
             WHERE
                 (abs(s.@weight - @@totIncidentCluster.get(s.@cid)) > epsilon ## s is not a singlet
@@ -108,11 +107,11 @@ CREATE QUERY louvain_parallel(INT iter1 = 10, INT iter2 = 10) FOR GRAPH social_t
         last_modularity = @@modularity;
         @@modularity = 0;
         T1 = SELECT s
-            FROM Start:s-(:e)-:t
+            FROM Start:s-(e_type:e)-:t
             WHERE s.@cid == t.@cid
             ACCUM
                 @@modularity += e.weight/(2*@@totalWeight)-s.@weight*t.@weight/(4*@@totalWeight*@@totalWeight);
-                   
+
         PRINT iteration AS Phase1Iter, @@modularity;
     END;
 
@@ -133,7 +132,7 @@ CREATE QUERY louvain_parallel(INT iter1 = 10, INT iter2 = 10) FOR GRAPH social_t
         FOREACH (key, value) IN @@representMap DO
             @@representSet += value;
         END;
-        
+
         represent = {@@representSet};
 
         @@totalWeight_merge = 0;
@@ -144,7 +143,7 @@ CREATE QUERY louvain_parallel(INT iter1 = 10, INT iter2 = 10) FOR GRAPH social_t
         @@moveComm.clear();
 
         S = SELECT s
-            FROM Start:s -(:e)- :t
+            FROM Start:s -(e_type:e)- :t
             ACCUM
                 case when s.@cid != t.@cid then
                     @@totIncidentCluster += (s.@cid -> e.weight),
@@ -157,7 +156,7 @@ CREATE QUERY louvain_parallel(INT iter1 = 10, INT iter2 = 10) FOR GRAPH social_t
                 # from s, incident to some clusters. Not consider the same cluster
                 s.@cweight += @@totIncidentCluster.get(s.@cid);
 
-        if @@totalWeight_merge == 0 then
+        if abs(@@totalWeight_merge) < epsilon then
             break;
         end;
 
@@ -169,7 +168,7 @@ CREATE QUERY louvain_parallel(INT iter1 = 10, INT iter2 = 10) FOR GRAPH social_t
                         FLOAT deltaQ_new = 0.0,
                         INT  maxWeightToC = 0,
                         FOREACH (cluster, weightToC) IN @@weightToClusterMap.get(s.@cid) DO
-                            deltaQ_new = weightToC/@@totalWeight_merge - 
+                            deltaQ_new = weightToC/@@totalWeight_merge -
                             (@@totIncidentCluster.get(cluster)*s.@cweight)/(2*@@totalWeight_merge*@@totalWeight_merge),
                             IF deltaQ_new > maxDeltaQ OR (abs(deltaQ_new - maxDeltaQ) < epsilon AND cluster < bestCluster) THEN
                                 maxDeltaQ = deltaQ_new,
@@ -190,7 +189,7 @@ CREATE QUERY louvain_parallel(INT iter1 = 10, INT iter2 = 10) FOR GRAPH social_t
         last_modularity = @@modularity;
         @@modularity = 0;
         T1 = SELECT s
-            FROM Start:s-(:e)-:t
+            FROM Start:s-(e_type:e)-:t
             WHERE s.@cid_new == t.@cid_new
             ACCUM
                 @@modularity += e.weight/(2*@@totalWeight)-s.@weight*t.@weight/(4*@@totalWeight*@@totalWeight);
@@ -198,8 +197,14 @@ CREATE QUERY louvain_parallel(INT iter1 = 10, INT iter2 = 10) FOR GRAPH social_t
         PRINT iteration2 AS Phase2Iter, @@modularity;
 
     END;
+
+    Start = {v_type.*};
+    Start = SELECT s
+            FROM Start:s
+            POST-ACCUM @@clusterSizes += (s.@cid_new -> 1);
+    print @@clusterSizes;
 }
 
-set query_timeout=180000
+set query_timeout=300000
 INSTALL QUERY louvain_parallel
-run query louvain_parallel(10, 10)
+run query louvain_parallel("APP", "SharedDevice", 20, 10)
