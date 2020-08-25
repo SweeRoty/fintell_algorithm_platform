@@ -1,0 +1,71 @@
+use graph kcore_test
+drop query dense_decomp
+
+/*
+Decompose the graph into nested subgraphs based on density
+*/
+
+CREATE DISTRIBUTED QUERY dense_decomp (STRING v_type, STRING e_type, STRING file_location) FOR GRAPH kcore_test {
+
+    TYPEDEF TUPLE <INT degree, INT vid> point;
+    HeapAccum<point>(1, degree ASC, vid ASC) @@curr_point;
+    SumAccum<INT> @@j;
+    MapAccum<INT, FLOAT> @@tmp_swap;
+
+    OrAccum @ordered;
+    SumAccum<INT> @curr_k;
+    SumAccum<INT> @index = -1;
+    SumAccum<INT> @y;
+
+    FILE f (file_location);
+
+    S = {v_type.*};
+    /*
+        Phase 1 --- remove the vertex with the smallest degree
+    */
+    while @@j < S.size() do
+        S = select s
+            from S:s -(e_type:e) - :t
+            accum
+                if not s.@ordered and not t.@ordered then
+                    s.@curr_k += 1
+                end
+            post-accum
+                if not s.@ordered then
+                    @@curr_point += point(s.@curr_k, getvid(s))
+                end;
+
+        S = select s
+            from S:s
+            post-accum
+                s.@curr_k = 0,
+                if getvid(s) == @@curr_point.top().vid then
+                    s.@ordered = True,
+                    s.@index = @@j
+                end;
+
+        @@curr_point.clear();
+        @@j += 1;
+    end;
+
+    /*
+        Phase 2 --- count the neighbors with larger index for each vertex
+    */
+    S = select s
+        from S:s -(e_type:e)- :t
+        accum
+            if t.@index > s.@index then
+                s.@y += 1
+            end;
+
+    @@j += -1;
+
+    f.println("Vertex_ID", "x", "y");
+    S = select s
+        from S:s
+        post-accum f.println(s, s.@index, s.@y);
+}
+
+set query_timeout=120000
+INSTALL QUERY dense_decomp
+run query dense_decomp("KNode", "KConnected", "/home/ronghui_safe/hangeyang/output/dense_decomposition_phase1.csv")
