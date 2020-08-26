@@ -1,2 +1,2 @@
-# fintell_algorithm_platform
-### 1st Stage --- graph algorithms based on TigerGraph
+## fintell_algorithm_platform
+### 1. Graph Analysis and Mining Algorithms on TigerGraph
