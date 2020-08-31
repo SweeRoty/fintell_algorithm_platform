@@ -1,0 +1,52 @@
+use graph sp_test
+drop query prim_mst
+
+/*
+Compute minimum spanning tree using PRIM on undirected graph
+*/
+
+CREATE DISTRIBUTED QUERY prim_mst (STRING v_type, STRING e_type, STRING file_location) FOR GRAPH sp_test {
+
+    TYPEDEF TUPLE <STRING too, INT key, STRING frr> pair;
+    HeapAccum<pair>(1, key ASC, too ASC, frr ASC) @@curr_node;
+    ListAccum<STRING> @@mst;
+    OrAccum @visited;
+    SumAccum<INT> @index;
+    FILE f (file_location);
+
+    S = {v_type.*};
+
+    S = select s
+        from S:s
+        post-accum
+            @@curr_node += pair(s.alias, 0, s.alias);
+
+    T = select s
+        from S:s
+        where @@curr_node.top().too == s.alias
+        post-accum
+            s.@visited = True,
+            @@mst += @@curr_node.top().frr + "---" + @@curr_node.top().too;
+
+    while T.size() > 0 do
+        @@curr_node.clear();
+
+        T = select t
+            from S:s -(e_type:e)- :t
+            where s.@visited and not t.@visited
+            accum @@curr_node += pair(t.alias, e.weight, s.alias)
+            post-accum
+                if @@curr_node.top().too == t.alias then
+                    t.@visited = True,
+                    @@mst += @@curr_node.top().frr + "---" + @@curr_node.top().too
+                end;
+    end;
+
+    foreach i in range[1, @@mst.size()-1] do
+        f.println(@@mst.get(i));
+    end;
+}
+
+set query_timeout=120000
+INSTALL QUERY prim_mst
+run query prim_mst("Node", "Dist", "/home/ronghui_safe/hangeyang/output/minimum_spanning_tree.csv")
