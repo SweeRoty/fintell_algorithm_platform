@@ -90,7 +90,7 @@ CREATE DISTRIBUTED QUERY sw_mincut (STRING v_type, STRING e_type, STRING file_lo
             from S:s
             post-accum s.@added = False;
 
-    @@global_min_cut += @@local_min_cut;
+        @@global_min_cut += @@local_min_cut;
         @@last_index = 0;
         @@last_alias = GSQL_INT_MAX;
         @@local_min_cut = 0;
