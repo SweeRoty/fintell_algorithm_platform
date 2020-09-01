@@ -1,0 +1,109 @@
+use graph cut_test
+drop query sw_mincut
+
+/*
+Compute global min cut using Stoer-Wagner on undirected graph
+*/
+
+CREATE DISTRIBUTED QUERY sw_mincut (STRING v_type, STRING e_type, STRING file_location) FOR GRAPH cut_test {
+
+    TYPEDEF TUPLE <INT alias, INT conn> pair;
+    HeapAccum<pair>(1, conn DESC, alias ASC) @@curr_node;
+    MapAccum<INT, INT> @@curr_map;
+    SumAccum<INT> @@curr_index = GSQL_INT_MAX;
+    MaxAccum<INT> @@last_index;
+    MinAccum<INT> @@last_alias;
+    SumAccum<INT> @@local_min_cut;
+    MinAccum<INT> @@global_min_cut = GSQL_INT_MAX;
+    OrAccum @added;
+    SumAccum<INT> @toA;
+    SumAccum<INT> @index;
+    SumAccum<INT> @new_alias;
+
+    #FILE f (file_location);
+
+    S = {v_type.*};
+
+    S = select s
+        from S:s
+        post-accum s.@new_alias = s.alias;
+
+    /*S = select s
+        from S:s
+        post-accum
+            @@curr_node += pair(s.alias, -1);*/
+
+    while @@curr_index > 1 limit 7 do
+        @@curr_index = 0;
+
+        T = select s
+            from S:s
+            where 2 == s.@new_alias
+            post-accum
+                s.@added = True,
+                s.@index = @@curr_index;
+
+        while T.size() > 0 limit 10 do
+            @@curr_index += 1;
+
+            T = select t
+                from S:s -(e_type:e)- :t
+                where s.@added and not t.@added
+                accum t.@toA += e.weight
+                post-accum @@curr_map += (t.@new_alias -> t.@toA);
+
+            foreach (key, value) in @@curr_map do
+                @@curr_node += pair(key, value);
+            end;
+
+            T = select s
+                from S:s
+                post-accum
+                    if @@curr_node.top().alias == s.@new_alias then
+                        s.@added = True,
+                        s.@index = @@curr_index,
+                        @@last_index += @@curr_index
+                    end,
+                    s.@toA = 0
+                having @@curr_node.top().alias == s.@new_alias;
+
+            @@curr_map.clear();
+            @@curr_node.clear();
+
+        end;
+
+        T = select s
+            from S:s
+            where s.@index >= @@last_index-1
+            post-accum @@last_alias += s.@new_alias;
+
+        T = select s
+            from S:s -(e_type:e)- :t
+            where s.@index >= @@last_index-1
+            accum
+                 if s.@index == @@last_index and t.@index != @@last_index then
+                     @@local_min_cut += e.weight
+                 end
+            post-accum s.@new_alias = @@last_alias;
+
+        S = select s
+            from S:s
+            post-accum s.@added = False;
+
+    @@global_min_cut += @@local_min_cut;
+        @@last_index = 0;
+        @@last_alias = GSQL_INT_MAX;
+        @@local_min_cut = 0;
+
+    end;
+
+    print @@global_min_cut;
+
+    /*foreach i in range[1, @@mst.size()-1] do
+        f.println(@@mst.get(i));
+    end;*/
+}
+
+set query_timeout=120000
+INSTALL QUERY sw_mincut
+run query sw_mincut("CNode", "CConnected", "/home/ronghui_safe/hangeyang/output/min_cut.csv")
