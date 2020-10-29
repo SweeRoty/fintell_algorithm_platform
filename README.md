@@ -1,2 +1,2 @@
 ## fintell_algorithm_platform
-### 1. Graph Analysis and Mining Algorithms on TigerGraph
+Start graph computation tasks by `sh start.sh` and follow the instructions (currently support degree and closeness computation)
