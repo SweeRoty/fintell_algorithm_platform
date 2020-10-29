@@ -1,11 +1,11 @@
-use graph fb_test
-drop query closeness_dist
+use graph G_NAME
+drop query closeness
 
 /*
 Output closeness distribution based on standard Dijkstra algorithm for all-source shortest path on directed/undirected graph with positive weight
 */
 
-CREATE DISTRIBUTED QUERY closeness_dist (STRING v_type, STRING e_type, int max_iter, STRING file_location) FOR GRAPH fb_test {
+CREATE DISTRIBUTED QUERY closeness (STRING v_type, STRING e_type, int max_iter, STRING file_location) FOR GRAPH G_NAME {
 
     MapAccum<INT, MinAccum<FLOAT>> @@status_map;
     MapAccum<INT, MinAccum<FLOAT>> @distMap;
@@ -53,14 +53,14 @@ CREATE DISTRIBUTED QUERY closeness_dist (STRING v_type, STRING e_type, int max_i
                         end
                     end
                 having s.@through.size() > 0;
-    
+
     end;
 
     f.println("Vertex_ID", "closeness");
     W = select s
         from V:s
         post-accum
-            float farness = 0.0, 
+            float farness = 0.0,
             foreach (source, dist) in s.@distMap do
                 farness = farness + dist
             end,
@@ -69,5 +69,5 @@ CREATE DISTRIBUTED QUERY closeness_dist (STRING v_type, STRING e_type, int max_i
 }
 
 set query_timeout=1200000
-INSTALL QUERY closeness_dist
-run query closeness_dist("Account", "Connected", 10, "/home/ronghui_safe/hangeyang/output/closeness_dist.csv")
+INSTALL QUERY closeness
+run query closeness("V_NAME", "E_NAME", MAX_ITER, "OUTPUT")

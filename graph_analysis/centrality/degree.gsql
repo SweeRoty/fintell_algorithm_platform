@@ -1,0 +1,26 @@
+use graph G_NAME
+drop query degree
+
+/*
+Compute the out degree for each vertex in the GRAPH and output the results to a local CSV file
+*/
+
+CREATE DISTRIBUTED QUERY degree (STRING v_type, STRING e_type, STRING file_location) FOR GRAPH G_NAME{
+
+    SumAccum<INT> @out_degree;
+    FILE f (file_location);
+
+    f.println("Vertex_ID", "Out_Degree");
+
+    Start = {v_type.*};
+    V = SELECT s
+        FROM Start:s
+        ACCUM
+            s.@out_degree += s.outdegree(e_type)
+        POST-ACCUM
+            f.println(s, s.@out_degree);
+}
+
+set query_timeout=120000
+INSTALL QUERY degree
+run query degree("V_NAME", "E_NAME", "OUTPUT")
