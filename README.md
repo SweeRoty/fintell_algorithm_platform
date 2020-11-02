@@ -1,6 +1,7 @@
 # Fintell (Graph) Algorithm Platform
+### Start graph computation tasks
 * Start graph computation tasks by `sh start.sh` and follow the instructions
-* *Currently support:*
+* *Startup script currently support:*
   1. degree
   2. closeness
   3. PageRank
