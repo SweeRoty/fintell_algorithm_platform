@@ -23,7 +23,7 @@ fi
 mkdir -p output/$g_name
 
 echo "Please select the task: "
-select task in "Centrality: degree" "Centrality: closeness" "Centrality: PageRank"
+select task in "Centrality: degree" "Centrality: closeness" "Centrality: PageRank" "Local Clustering Coefficient"
 do
 	case $task in
 		"Centrality: degree" )
@@ -41,7 +41,11 @@ do
 			read -p "Please enter the damping factor for PageRank algorithm (e.g. 0.85): " damping
 			path=analysis/centrality/
 			algo=pagerank.gsql
-			dest=output\\/$g_name\\/pagerank_score.csv
+			dest=output\\/$g_name\\/pagerank_score.csv;;
+		"Local Clustering Coefficient" )
+			path=analysis/clustering/
+			algo=clustering_coef.gsql
+			dest=output\\/$g_name\\/local_clustering_coef.csv
 	esac
 	cp $path$algo tmp_script.gsql
 	sed -i "s/G_NAME/$g_name/g" tmp_script.gsql
