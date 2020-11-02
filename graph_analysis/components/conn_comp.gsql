@@ -1,11 +1,11 @@
-use graph fb_test
+use graph G_NAME
 drop query conn_comp
 
 /*
 Compute the distribution of (weak) connected components and output the results to a local CSV file
 */
 
-CREATE DISTRIBUTED QUERY conn_comp (STRING v_type, STRING e_type, STRING file_location) FOR GRAPH fb_test {
+CREATE DISTRIBUTED QUERY conn_comp (STRING v_type, STRING e_type, STRING file_location) FOR GRAPH G_NAME {
 
     MinAccum<int> @cc_id = 0; //each vertex's tentative component id
     MinAccum<int> @prev_id = 0;
@@ -53,4 +53,4 @@ CREATE DISTRIBUTED QUERY conn_comp (STRING v_type, STRING e_type, STRING file_lo
 
 set query_timeout=120000
 INSTALL QUERY conn_comp
-run query conn_comp("Account", "Connected", "/home/ronghui_safe/hangeyang/output/conn_comp_dist.csv")
+run query conn_comp("V_NAME", "E_NAME", "OUTPUT")
