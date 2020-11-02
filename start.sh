@@ -23,7 +23,7 @@ fi
 mkdir -p output/$g_name
 
 echo "Please select the task: "
-select task in "Centrality: degree" "Centrality: closeness" "Centrality: PageRank" "Local Clustering Coefficient"
+select task in "Centrality: degree" "Centrality: closeness" "Centrality: PageRank" "Local Clustering Coefficient" "Connected Components"
 do
 	case $task in
 		"Centrality: degree" )
@@ -45,7 +45,11 @@ do
 		"Local Clustering Coefficient" )
 			path=analysis/clustering/
 			algo=clustering_coef.gsql
-			dest=output\\/$g_name\\/local_clustering_coef.csv
+			dest=output\\/$g_name\\/local_clustering_coef.csv;;
+		"Connected Components" )
+			path=analysis/components/
+			algo=conn_comp.gsql
+			dest=\\.\\/output\\/$g_name\\/conn_comp_size.csv
 	esac
 	cp $path$algo tmp_script.gsql
 	sed -i "s/G_NAME/$g_name/g" tmp_script.gsql
