@@ -1,11 +1,11 @@
-use graph fb_test
+use graph G_NAME
 drop query clustering_coef
 
 /*
 Compute local clustering coeficient for each vertex on undirected graph
 */
 
-CREATE DISTRIBUTED QUERY clustering_coef (STRING v_type, STRING e_type, STRING file_location) FOR GRAPH fb_test {
+CREATE DISTRIBUTED QUERY clustering_coef (STRING v_type, STRING e_type, STRING file_location) FOR GRAPH G_NAME {
 
     SetAccum<INT> @neighbors;
     SumAccum<FLOAT> @localCoef;
@@ -42,4 +42,4 @@ CREATE DISTRIBUTED QUERY clustering_coef (STRING v_type, STRING e_type, STRING f
 
 set query_timeout=120000
 INSTALL QUERY clustering_coef
-run query clustering_coef("Account", "Connected", "/home/ronghui_safe/hangeyang/output/local_coef_dist.csv")
+run query clustering_coef("V_NAME", "E_NAME", "OUTPUT")
