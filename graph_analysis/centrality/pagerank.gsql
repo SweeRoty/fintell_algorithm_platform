@@ -1,4 +1,4 @@
-use graph fb_test
+use graph G_NAME
 drop query pageRank
 
 /*
@@ -10,7 +10,7 @@ The pageRank algorithm stops when either of the following is true:
     b) the max score change for any vertex compared to the last iteration <= max_change
 */
 
-CREATE DISTRIBUTED QUERY pageRank (FLOAT max_change, INT max_iter, FLOAT damping, STRING v_type, STRING e_type, STRING file_location) FOR GRAPH fb_test{
+CREATE DISTRIBUTED QUERY pageRank (FLOAT tol, INT max_iter, FLOAT damping, STRING v_type, STRING e_type, STRING file_location) FOR GRAPH G_NAME{
 
     MaxAccum<float> @@max_diff = 9999; // max score change in an iteration
     SumAccum<float> @received_score = 0; // sum of scores each vertex receives FROM neighbors
@@ -22,7 +22,7 @@ CREATE DISTRIBUTED QUERY pageRank (FLOAT max_change, INT max_iter, FLOAT damping
         @@max_diff = 0;
         V = SELECT s
             FROM Start:s -(e_type:e)-> :t
-            ACCUM t.@received_score += s.@score/(s.outdegree(e_type)) 
+            ACCUM t.@received_score += s.@score/(s.outdegree(e_type))
             POST-ACCUM
                 s.@score = (1.0-damping)+damping*s.@received_score,
                 s.@received_score = 0,
@@ -37,4 +37,4 @@ CREATE DISTRIBUTED QUERY pageRank (FLOAT max_change, INT max_iter, FLOAT damping
 
 set query_timeout=120000
 INSTALL QUERY pageRank
-run query pageRank(0.001, 10, 0.85, "Account", "Connected", "/home/ronghui_safe/hangeyang/output/page_rank_dist.csv")
+run query pageRank(TOL, MAX_ITER, DAMPING, "V_NAME", "E_NAME", "OUTPUT")
