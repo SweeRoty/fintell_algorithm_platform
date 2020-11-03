@@ -1,7 +1,7 @@
-use graph app_test
+use graph G_NAME
 drop query louvain_parallel
 
-CREATE DISTRIBUTED QUERY louvain_parallel(STRING v_type, STRING e_type, INT iter1, INT iter2) FOR GRAPH app_test {
+CREATE DISTRIBUTED QUERY louvain_parallel(STRING v_type, STRING e_type, INT iter1, INT iter2, STRING file_location) FOR GRAPH G_NAME {
     TYPEDEF TUPLE <INT csize, INT number> ClusterNum;
     TYPEDEF TUPLE <VERTEX node, INT cid, FLOAT deltaQ> vDeltaQ;
 
@@ -214,4 +214,4 @@ CREATE DISTRIBUTED QUERY louvain_parallel(STRING v_type, STRING e_type, INT iter
 
 set query_timeout=300000
 INSTALL QUERY louvain_parallel
-run query louvain_parallel("APP", "SharedDevice", 20, 10, "/home/ronghui_safe/hangeyang/output/app/communities_louvain.csv")
+run query louvain_parallel("V_NAME", "E_NAME", ITER1, ITER2, "OUTPUT")
