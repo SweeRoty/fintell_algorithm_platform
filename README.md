@@ -7,3 +7,5 @@
   3. PageRank
   4. local clustering coefficient
   5. (weak) connected components
+  6. Label Propagation
+  7. Louvain
