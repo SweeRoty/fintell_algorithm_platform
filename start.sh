@@ -25,7 +25,7 @@ dest_dir=$curr_dir/output/$g_name/
 mkdir -p $dest_dir
 
 echo "Please select the task: "
-select task in "Centrality: degree" "Centrality: closeness" "Centrality: PageRank" "Local Clustering Coefficient" "Connected Components" "Community: LPA" "Community: Louvain"
+select task in "Centrality: degree" "Centrality: closeness" "Centrality: betweenness" "Centrality: PageRank" "Local Clustering Coefficient" "Connected Components" "Community: LPA" "Community: Louvain"
 do
 	case $task in
 		"Centrality: degree" )
@@ -37,6 +37,11 @@ do
 			path=graph_analysis/centrality/
 			algo=closeness.gsql
 			dest=${dest_dir}closeness_dist.csv;;
+		"Centrality: betweenness" )
+			read -p "Please enter the maximum iteration for betweenness computation (e.g. 10): " max_iter
+			path=graph_analysis/centrality/
+			algo=betweenness.gsql
+			dest=${dest_dir}betweenness_dist.csv;;
 		"Centrality: PageRank" )
 			read -p "Please enter the tolerance to declare convergence (e.g. 0.001)" tol
 			read -p "Please enter the maximum iteration for PageRank algorithm (e.g. 10): " max_iter
@@ -71,6 +76,9 @@ do
 	sed -i "s?OUTPUT?$dest?g" tmp_script.gsql
 	case $task in
 		"Centrality: closeness" )
+			max_iter=$((max_iter))
+			sed -i "s/MAX_ITER/$max_iter/g" tmp_script.gsql;;
+		"Centrality: betweenness" )
 			max_iter=$((max_iter))
 			sed -i "s/MAX_ITER/$max_iter/g" tmp_script.gsql;;
 		"Centrality: PageRank" )
