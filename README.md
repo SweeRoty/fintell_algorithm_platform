@@ -4,8 +4,9 @@
 * *Startup script currently support:*
   1. degree
   2. closeness
-  3. PageRank
-  4. local clustering coefficient
-  5. (weak) connected components
-  6. Label Propagation
-  7. Louvain
+  3. betweenness (not exactly implemented)
+  4. PageRank
+  5. local clustering coefficient
+  6. (weak) connected components
+  7. Label Propagation
+  8. Louvain
