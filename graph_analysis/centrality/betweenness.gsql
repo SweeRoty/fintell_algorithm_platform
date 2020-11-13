@@ -1,12 +1,12 @@
-use graph sp_test
-drop query betweenness_dist
+use graph G_NAME
+drop query betweenness
 drop query dijkstra_path
 
 /*
 Output betweenness distribution based on standard Dijkstra algorithm for single-source shortest path on directed/undirected graph with positive weight
 */
 
-CREATE QUERY dijkstra_path (VERTEX source, STRING e_type, STRING v_index, INT max_iter) FOR GRAPH sp_test RETURNS(MapAccum<STRING, INT>){
+CREATE QUERY dijkstra_path (VERTEX source, STRING e_type, STRING v_index, INT max_iter) FOR GRAPH G_NAME RETURNS(MapAccum<STRING, INT>){
 
     TYPEDEF TUPLE<FLOAT dist, STRING pred> distPath;
     HeapAccum<distPath>(1, dist ASC) @dist_path;
@@ -15,14 +15,14 @@ CREATE QUERY dijkstra_path (VERTEX source, STRING e_type, STRING v_index, INT ma
     FLOAT curr_min_dist;
     MinAccum<FLOAT> @@min_dist;
     MapAccum<STRING, INT> @@local_map;
-    FILE f ("/home/ronghui_safe/hangeyang/output/betweenness/bt"+v_index);
+    #FILE f ("/home/ronghui_safe/hangeyang/output/betweenness/bt"+v_index);
 
     S = {source};
     S = select s
         from S:s
         post-accum
             s.@dist_path += distPath(0, ""),
-            s.@path += s.alias;
+            s.@path += to_string(s.alias);
 
     while S.size() > 0 limit max_iter do
         curr_min_dist = @@min_dist;
@@ -32,7 +32,7 @@ CREATE QUERY dijkstra_path (VERTEX source, STRING e_type, STRING v_index, INT ma
             where abs(s.@dist_path.top().dist-curr_min_dist) < 0.001# and not t.@visited
             accum
                 if not t.@visited then
-                    t.@dist_path += distPath(s.@dist_path.top().dist+e.weight, s.alias)
+                    t.@dist_path += distPath(s.@dist_path.top().dist+e.weight, to_string(s.alias))
                 end
             post-accum
                 s.@visited = True
@@ -50,16 +50,16 @@ CREATE QUERY dijkstra_path (VERTEX source, STRING e_type, STRING v_index, INT ma
     while S.size() > 0 do
         S = select t
             from S:s- (e_type:e) - :t
-            where t.@dist_path.top().pred == s.alias
+            where t.@dist_path.top().pred == to_string(s.alias)
             accum
                 t.@path = s.@path,
-                t.@path += t.alias;
+                t.@path += to_string(t.alias);
     end;
 
     S = {source};
     S = select t
         from S:s -(e_type:e) - :t
-        where t.@dist_path.top().pred == s.alias
+        where t.@dist_path.top().pred == to_string(s.alias)
         accum
             s.@visited = False,
             t.@visited = False;
@@ -75,33 +75,32 @@ CREATE QUERY dijkstra_path (VERTEX source, STRING e_type, STRING v_index, INT ma
                 end;
     end;
 
-    f.println("Vertex_ID", "betweenness_count");
-    foreach (vid, btc) in @@local_map do
-        f.println(vid, btc);
-    end;
     return @@local_map;
 }
 
-CREATE DISTRIBUTED QUERY betweenness_dist (STRING v_type, STRING e_type, INT max_iter) FOR GRAPH sp_test {
+CREATE DISTRIBUTED QUERY betweenness (STRING v_type, STRING e_type, INT max_iter, STRING file_location) FOR GRAPH G_NAME {
 
     MapAccum<STRING, INT> @local_map;
     MapAccum<STRING, INT> @@betweenness_map;
+    FILE f (file_location);
 
     Start = {v_type.*};
 
     Start = select s
             from Start:s
             post-accum
-                s.@local_map = dijkstra_path(s, e_type, s.alias, max_iter),
+                s.@local_map = dijkstra_path(s, e_type, to_string(s.alias), max_iter),
                 foreach (vid, btc) in s.@local_map do
                     @@betweenness_map += (vid -> btc)
                 end;
 
-    print @@betweenness_map;
-
+    f.println("Vertex_ID", "betweenness");
+    foreach (vid, btn) in @@betweenness_map do
+        f.println(vid, btn);
+    end;
 }
 
-set query_timeout=600000
+set query_timeout=1200000
 INSTALL QUERY dijkstra_path
-INSTALL QUERY betweenness_dist
-run query betweenness_dist("Node", "Dist", 10)
+INSTALL QUERY betweenness
+run query betweenness("V_NAME", "E_NAME", MAX_ITER, "OUTPUT")
