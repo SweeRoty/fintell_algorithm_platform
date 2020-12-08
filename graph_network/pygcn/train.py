@@ -9,7 +9,7 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 
-from gcn import GCN
+from gcn_model import GCN
 from gcn_data import GCNData
 
 def load_app_graph(node_path, edge_path):
