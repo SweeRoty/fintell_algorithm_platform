@@ -12,7 +12,8 @@ class GCNData():
 		"""
 		self.y = torch.LongTensor(np.where(self.one_hot_encode(y))[1])
 
-		self.x = torch.FloatTensor(np.array(self.normalize(x)))
+		x = sp.csr_matrix(x, dtype=np.float32)
+		self.x = torch.FloatTensor(np.array(self.normalize(x).todense()))
 
 		n = x.shape[0]
 		adj = sp.coo_matrix((edges[:, 2], (edges[:, 0], edges[:, 1])), shape=(n, n), dtype=np.float32)
