@@ -9,8 +9,8 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 
-from gcn_model import GCN
 from gcn_data import GCNData
+from gcn_model import GCN
 
 def load_app_graph(node_path, edge_path):
 	"""Load the APP graph using pandas IO
