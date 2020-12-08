@@ -1,9 +1,11 @@
+# -*- coding: utf-8 -*-
+
 import math
 
-import torch
-import torch.nn.init as init
 from torch.nn.modules.module import Module
 from torch.nn.parameter import Parameter
+import torch
+import torch.nn.init as init
 
 class GraphConvolutionalLayer(Module):
 
