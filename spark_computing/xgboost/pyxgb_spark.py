@@ -34,7 +34,7 @@ if __name__ == '__main__':
 	print('====> Parsing local arguments')
 	parser = argparse.ArgumentParser()
 	parser.add_argument('--label_col', type=str, default='Pseudo_tag')
-	parser.add_argument('--cv', dest='tuning_mode', action='store_true', default=False)
+	parser.add_argument('--cv', action='store_true', default=False)
 	parser.add_argument('--cv_splits', type=int, default=5)
 	parser.add_argument('--tv_ratio', type=float, default=0.7)
 	parser.add_argument('--is_saving', action='store_true', default=False)
@@ -87,7 +87,7 @@ if __name__ == '__main__':
 				.build()
 
 	model = None
-	if args.tuning_mode:
+	if args.cv:
 		tvs = TrainValidationSplit() \
 				.setEstimator(pipeline) \
 				.setEstimatorParamMaps(paramGrid) \
